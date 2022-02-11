@@ -8,5 +8,5 @@ from rest_framework import routers, serializers, viewsets
 # Additionally, we include login URLs for the browsable API.
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", include("api.urls", namespace="rest_framework")),
+    path("api/", include("api.urls")),
 ]
