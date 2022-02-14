@@ -1,5 +1,7 @@
 from django.db import models
-from django.contrib.auth.base_user import AbstractBaseUser
+from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.models import PermissionsMixin
+from django.utils.translation import gettext_lazy as _
 
 '''
 用户鉴权
@@ -13,19 +15,59 @@ https://docs.djangoproject.com/en/4.0/topics/auth/default/#how-to-log-a-user-in
 '''
 
 
+class CustomUserManager(BaseUserManager):
+    """custom suer manager"""
+    use_in_migration = True
+
+    def _create_user(self, phone_number, passwd, **extra_fields):
+        if not phone_number:
+            raise ValueError('phone number is essential!')
+        user = self.model(phone_number=phone_number, **extra_fields)
+        user.set_password(passwd)
+        user.save(using=self._db)
+        return user
+
+    def create_user(self, phone_number, passwd, **extra_field):
+        extra_field.setdefault('is_superuser', False)
+        return self._create_user(phone_number, passwd, **extra_field)
+
+    def create_superuser(self, phone_number, password, **extra_fields):
+        extra_fields.setdefault('is_superuser', True)
+
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+
+        return self._create_user(phone_number, password, **extra_fields)
+
+
 # Create your models here.
-class CustomUser(AbstractBaseUser):
-    phone_number = models.CharField(max_length=11, verbose_name='your phone number')  # 手机号
+class CustomUser(AbstractBaseUser, PermissionsMixin):
+    """自定义用户"""
+    phone_number = models.CharField(_('phone number'),
+                                    unique=True, max_length=11)  # 手机号
     option = [('男', '男性'), ('女', '女性')]
     gender = models.CharField(choices=option, default='男', max_length=10)  # 性别
-    REQUIRED_FIELDS = ['sex']
+
+    is_superadmin = models.BooleanField(_('is_superadmin'), default=False)
+    is_active = models.BooleanField(_('is_active'), default=True)
+    is_staff = models.BooleanField(default=True)
+
+    REQUIRED_FIELDS = ['gender']
+    USERNAME_FIELD = 'phone_number'
+
+    objects = CustomUserManager()
+
+    class Meta:
+        verbose_name = _('user')
+        verbose_name_plural = _('users')
 
     def __str__(self):
-        return self.get_username()
+        return self.phone_number
 
 
 class User(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, verbose_name='account')
+    name = models.CharField(_('user name'), max_length=30)
     avatar = models.FileField(verbose_name='avatar')
     height = models.IntegerField(verbose_name='your height')
     weight = models.IntegerField(verbose_name='your weight')
@@ -33,6 +75,9 @@ class User(models.Model):
     idcard_number = models.CharField(max_length=18, verbose_name='ID card', blank=True)
     hobby_options = [('太极', 'taiji'), ('瑜伽', "yoga")]
     hobbies = models.CharField(choices=hobby_options, verbose_name='your hobbies', max_length=20)
+
+    def __str__(self):
+        return self.user.phone_number
 
 
 class Course(models.Model):
