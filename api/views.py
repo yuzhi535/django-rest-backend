@@ -4,7 +4,7 @@
 # 17:42   当前系统时间
 # PyCharm   创建文件的IDE名称
 from django.contrib import messages
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import FormView
 from rest_framework.decorators import api_view
@@ -25,5 +25,15 @@ def login(request):
     phonenumber = data['phonenumber']
     user = authenticate(phone_number=phonenumber, password=passwd)
     if user:
-        return HttpResponse(f'{user.id}')
-    return HttpResponse(f'{user}')
+        ret = {'id': user.id, 'status': 200}
+        return JsonResponse(ret)
+    return JsonResponse({'status': 404})
+
+
+@api_view(['POST'])
+def register(request):
+    data = request.data
+    if not data:
+        return HttpResponse(f'{data}')
+    else:
+        return HttpResponse(f'fuck u')

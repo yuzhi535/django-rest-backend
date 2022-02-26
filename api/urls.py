@@ -10,6 +10,6 @@ from api import views
 
 urlpatterns = [
     path('', views.show),
-    path('user/login', views.login)
-    
+    path('user/login', views.login),
+    path('user/register', views.register)
 ]

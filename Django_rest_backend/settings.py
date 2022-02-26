@@ -24,7 +24,7 @@ SECRET_KEY = 'django-insecure-q2-x0^#0(^jwg9l#)h!vta_u^6km!9^^$#(fa1(mevtxy*hg5&
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 # Application definition
 
@@ -75,8 +75,13 @@ WSGI_APPLICATION = 'Django_rest_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'openpose',
+        'USER': 'yuxi',
+        'PASSWORD': '010503',
+        'HOST': '110.40.185.43',
+        # 'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 
