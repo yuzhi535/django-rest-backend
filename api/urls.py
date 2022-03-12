@@ -12,6 +12,5 @@ urlpatterns = [
     path('', views.show),
     path('user/login', views.login),
     path('user/register', views.register),
-    path('user/upload/<filename>', views.FileUploadView.as_view()),
     path('user/example/login', views.CustomAuthToken.as_view())
 ]
