@@ -47,6 +47,18 @@ def register(request):
         return HttpResponse(f'fuck u')
 
 
+class FileUploadView(views.APIView):
+    parser_classes = (MultiPartParser, FormParser)
+
+    def post(self, request, filename, format=None):
+        data = request.data
+        file_obj = request.data['file']
+        with open(filename, 'wb') as f:
+            for chunk in file_obj.chunks():
+                f.write(chunk)
+        return Response(status=204)
+
+
 class CustomAuthToken(ObtainAuthToken):
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(data=request.data,
