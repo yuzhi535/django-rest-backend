@@ -55,7 +55,7 @@ class FileUploadView(views.APIView):
         with open(filename, 'wb') as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
-        return Response(status=204)
+        return JsonResponse({'status': 204})
 
 
 class CustomAuthToken(ObtainAuthToken):
