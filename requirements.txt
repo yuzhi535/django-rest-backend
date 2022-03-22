@@ -4,3 +4,6 @@ markdown       # Markdown support for the browsable API.
 django-filter  # Filtering support
 bcrypt
 psycopg2
+paddlehub
+numpy
+opencv-python
