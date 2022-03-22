@@ -51,12 +51,11 @@ class FileUploadView(views.APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, filename, format=None):
-        data = request.data
         file_obj = request.data['file']
         with open(filename, 'wb') as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
-        return Response(status=204)
+        return JsonResponse({'status': 204})
 
 
 class CustomAuthToken(ObtainAuthToken):
