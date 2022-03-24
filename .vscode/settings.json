@@ -1,0 +1,14 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "server": "110.40.185.43",
+            "port": 15432,
+            "askForPassword": true,
+            "driver": "PostgreSQL",
+            "name": "openpose",
+            "database": "openpose",
+            "username": "yuxi"
+        }
+    ]
+}

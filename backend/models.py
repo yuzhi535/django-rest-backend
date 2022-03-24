@@ -14,6 +14,20 @@ user login
 https://docs.djangoproject.com/en/4.0/topics/auth/default/#how-to-log-a-user-in
 '''
 
+import hashlib
+
+
+def encrypt_password(password):
+    # 使用md5算法对密码进行加密
+    md5 = hashlib.md5()
+    sign_str = password + '#@%^&*'
+    sign_bytes_utf8 = sign_str.encode(encoding='utf-8')
+
+    md5.update(sign_bytes_utf8)
+    encrypted_password = md5.hexdigest()
+
+    return encrypted_password
+
 
 class CustomUserManager(BaseUserManager):
     """custom suer manager"""
@@ -48,6 +62,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     option = [('男', '男性'), ('女', '女性')]
     gender = models.CharField(choices=option, default='男', max_length=10)  # 性别
 
+    password = models.CharField(max_length=256, default='000000')
+
     is_superadmin = models.BooleanField(_('is_superadmin'), default=False)
     is_active = models.BooleanField(_('is_active'), default=True)
     is_staff = models.BooleanField(default=True)
@@ -64,9 +80,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return self.phone_number
 
+    def set_password(self, password):
+        self.password = encrypt_password(password)
+
+    def verify_password(self, password):
+        return self.password == encrypt_password(password)
+
 
 class User(models.Model):
-    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, verbose_name='account')
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='no_essential',
+                                verbose_name='account')
     name = models.CharField(_('user name'), max_length=30)
     avatar = models.FileField(verbose_name='avatar')
     height = models.IntegerField(verbose_name='your height')
@@ -78,6 +101,18 @@ class User(models.Model):
 
     def __str__(self):
         return self.user.phone_number
+
+    @property
+    def phone_number(self):
+        return self.phone_number
+
+    @property
+    def password(self):
+        return self.password
+
+    @property
+    def gender(self):
+        return self.gender
 
 
 class Course(models.Model):
