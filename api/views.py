@@ -21,6 +21,8 @@ from backend import forms
 from backend.models import User, Course, CustomUser
 from django.contrib.auth import authenticate, login
 
+from backend.serializers import UserModelSerializer
+
 
 def show(request):
     return HttpResponse("hello world")
@@ -40,11 +42,35 @@ def login(request):
 
 @api_view(['POST'])
 def register(request):
-    data = request.data
-    if not data:
-        return HttpResponse(f'{data}')
+    phone_number = request.data.get('phone_number')
+    # 获取用户第一次输入的密码
+    password1 = request.data.get('password1')
+    # 获取用户输入的第二次密码
+    password2 = request.data.get('password2')
+    name = request.data.get('name')
+    gender = request.data.get('gender')
+    height = request.data.get('height')
+    weight = request.data.get('weight')
+    avatar = request.data.get('avatar')
+    birthday = request.data.get('birthday')
+    idcard_number = request.data.get('idcard_number')
+    hobbies = request.data.get('hoobies')
+
+    user = User.objects.filter(phone_number=phone_number)
+    if user:
+        return Response({'msg': '该用户名存在了', 'code': 400})
     else:
-        return HttpResponse(f'fuck u')
+        if password1 == password2:
+            user_dict = {'phone_number': phone_number, 'password': password1, 'name': name,
+                         'gender': gender, 'height': height, 'weight': weight, 'avatar': avatar,
+                         'birthday': birthday, 'idcard_number': idcard_number, 'hobbies': hobbies}
+            user_serializer = UserModelSerializer(data=user_dict)
+            # 进行数据校验，保存
+            if user_serializer.is_valid():
+                user_serializer.save()
+                return Response({'msg': '注册成功', 'code': 200})
+            else:
+                return Response({'msg': user_serializer.errors, 'code': 400})
 
 
 class FileUploadView(views.APIView):

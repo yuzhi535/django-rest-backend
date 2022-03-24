@@ -11,7 +11,22 @@ a  backend for my school homework
 * 用户名
 * 密码
 * 生日
-* ...
+* 身高
+* 体重
+* 手机号
+* 姓名
+* 头像
+* 生日
+
+### 返回
+
+* token
+* user_ID
+* status： 200
+
+### 若失败
+
+* status： 404
 
 ## 登陆接口
 
@@ -24,6 +39,11 @@ a  backend for my school homework
 
 * token 临时token
 * user_Id 用户ID
+* status： 200
+
+### 若失败
+
+* status： 404
 
 ## 上传视频接口
 
