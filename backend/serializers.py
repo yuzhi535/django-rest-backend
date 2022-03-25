@@ -52,28 +52,6 @@ class UserModelSerializer(serializers.ModelSerializer):
             },
         }
 
-    # 创建用户时更新密码为密文
-    def create(self, validated_data):
-        user = super().create(validated_data)
-        user.set_password(validated_data['password'])
-        user.save()
-        return user
-
-    # 更新用户时更新密码为密文
-    def update(self, instance, validated_data):
-        user = super().update(instance, validated_data)
-        if 'password' in validated_data.keys():
-            user.set_password(validated_data['password'])
-        user.save()
-        return user
-
-    # # 重写to_representation方法，自定义响应中的json数据
-    # def to_representation(self, instance):
-    #     # 返回结果中id字段中间有横线，需要去除
-    #     ret = super().to_representation(instance)
-    #     ret['id'] = ret['id'].replace('-', '')
-    #     return ret
-
     def create(self, validated_data):
         newcustomuser = CustomUser.objects.create(gender=validated_data['user']['gender'],
                                                   password=validated_data['user']['password'],

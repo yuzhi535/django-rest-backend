@@ -18,9 +18,11 @@ a  backend for my school homework
 * 头像
 * 生日
 
+**以上使用form-data提交**
+
 ### 返回
 
-* token
+* token（**暂定**）
 * user_ID
 * status： 200
 
@@ -34,6 +36,8 @@ a  backend for my school homework
 
 * 用户名
 * 密码
+
+**统一使用form-data形式**
 
 ### 返回
 
@@ -64,3 +68,5 @@ a  backend for my school homework
 * 用户token
 * 文件名
 * 课程
+
+**form-data**

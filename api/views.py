@@ -54,11 +54,11 @@ def register(request):
     avatar = request.data.get('avatar')
     birthday = request.data.get('birthday')
     idcard_number = request.data.get('idcard_number')
-    hobbies = request.data.get('hoobies')
+    hobbies = request.data.get('hobbies')
 
-    user = User.objects.filter(phone_number=phone_number)
+    user = CustomUser.objects.filter(phone_number=phone_number)
     if user:
-        return Response({'msg': '该用户名存在了', 'code': 400})
+        return JsonResponse({'msg': '该用户已注册', 'status': 400})
     else:
         if password1 == password2:
             user_dict = {'phone_number': phone_number, 'password': password1, 'name': name,
@@ -68,9 +68,9 @@ def register(request):
             # 进行数据校验，保存
             if user_serializer.is_valid():
                 user_serializer.save()
-                return Response({'msg': '注册成功', 'code': 200})
+                return JsonResponse({'msg': '注册成功', 'status': 200})
             else:
-                return Response({'msg': user_serializer.errors, 'code': 400})
+                return Response({'msg': user_serializer.errors, 'status': 400})
 
 
 class FileUploadView(views.APIView):
