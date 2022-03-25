@@ -17,6 +17,7 @@ a  backend for my school homework
 * 姓名
 * 头像
 * 生日
+* 身份证号
 
 **以上使用form-data提交**
 
