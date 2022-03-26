@@ -91,13 +91,13 @@ class User(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='no_essential',
                                 verbose_name='account')
     name = models.CharField(_('user name'), max_length=30)
-    avatar = models.FileField(verbose_name='avatar')
-    height = models.IntegerField(verbose_name='your height')
-    weight = models.IntegerField(verbose_name='your weight')
-    birthday = models.DateField(verbose_name='your birthday')
-    idcard_number = models.CharField(max_length=18, verbose_name='ID card', blank=True)
+    avatar = models.FileField(verbose_name='avatar', blank=True, null=True)
+    height = models.IntegerField(verbose_name='your height', blank=True)
+    weight = models.IntegerField(verbose_name='your weight', blank=True)
+    birthday = models.DateField(verbose_name='your birthday', blank=True, null=True)
+    idcard_number = models.CharField(max_length=18, verbose_name='ID card', blank=True, null=True)
     hobby_options = [('太极', 'taiji'), ('瑜伽', "yoga")]
-    hobbies = models.CharField(choices=hobby_options, verbose_name='your hobbies', max_length=20)
+    hobbies = models.CharField(choices=hobby_options, verbose_name='your hobbies', max_length=20, blank=True, null=True)
 
     def __str__(self):
         return self.user.phone_number

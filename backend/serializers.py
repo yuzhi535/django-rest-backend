@@ -16,7 +16,8 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
 
 class UserModelSerializer(serializers.ModelSerializer):
-    phone_number = serializers.CharField(source='user.phone_number', required=True)
+    phone_number = serializers.CharField(
+        source='user.phone_number', required=True)
     password = serializers.CharField(source='user.password', style={'input_type': 'password'},
                                      required=True, write_only=True, max_length=256)
     gender = serializers.CharField(source='user.gender')
@@ -24,8 +25,8 @@ class UserModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         # ['no_essential', 'name', 'avatar', 'height', 'weight', 'birthday', 'idcard_number', 'hobbies']
-        fields = ['password', 'phone_number', 'gender', "name", 'avatar', 'height', 'weight', 'birthday',
-                  'idcard_number', 'hobbies']
+        fields = ['password', 'phone_number',
+                  'gender', "name", 'height', 'weight']
 
         extra_kwargs = {
             "age": {
@@ -58,12 +59,13 @@ class UserModelSerializer(serializers.ModelSerializer):
                                                   phone_number=validated_data['user']['phone_number'], )
         newuser = User.objects.create(user=newcustomuser,
                                       name=validated_data['name'],
-                                      avatar=validated_data['avatar'],
+                                    #   avatar=validated_data['avatar'],
                                       height=validated_data['height'],
                                       weight=validated_data['weight'],
-                                      birthday=validated_data['birthday'],
-                                      idcard_number=validated_data['idcard_number'],
-                                      hobbies=validated_data['hobbies'])
+                                    #   birthday=validated_data['birthday'],
+                                    #   idcard_number=validated_data['idcard_number'],
+                                    #   hobbies=validated_data['hobbies']
+                                      )
 
         return newuser
 

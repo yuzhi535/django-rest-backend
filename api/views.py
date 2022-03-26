@@ -62,15 +62,26 @@ def register(request):
     else:
         if password1 == password2:
             user_dict = {'phone_number': phone_number, 'password': password1, 'name': name,
-                         'gender': gender, 'height': height, 'weight': weight, 'avatar': avatar,
-                         'birthday': birthday, 'idcard_number': idcard_number, 'hobbies': hobbies}
+                         'gender': gender}
+            if height:
+                user_dict['height'] = height
+            if weight:
+                user_dict['weight'] = weight
+            if birthday:
+                user_dict['birthday'] = birthday
+            if idcard_number:
+                user_dict['idcard_number'] = idcard_number
+            if hobbies:
+                user_dict['hobbies'] = hobbies
+            if avatar:
+                user_dict['avatar'] = avatar
             user_serializer = UserModelSerializer(data=user_dict)
             # 进行数据校验，保存
             if user_serializer.is_valid():
                 user_serializer.save()
                 return JsonResponse({'msg': '注册成功', 'status': 200})
             else:
-                return Response({'msg': user_serializer.errors, 'status': 400})
+                return JsonResponse({'msg': user_serializer.errors, 'status': 400})
 
 
 class FileUploadView(views.APIView):
