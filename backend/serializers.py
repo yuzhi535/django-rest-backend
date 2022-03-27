@@ -59,12 +59,12 @@ class UserModelSerializer(serializers.ModelSerializer):
                                                   phone_number=validated_data['user']['phone_number'], )
         newuser = User.objects.create(user=newcustomuser,
                                       name=validated_data['name'],
-                                    #   avatar=validated_data['avatar'],
+                                      #   avatar=validated_data['avatar'],
                                       height=validated_data['height'],
                                       weight=validated_data['weight'],
-                                    #   birthday=validated_data['birthday'],
-                                    #   idcard_number=validated_data['idcard_number'],
-                                    #   hobbies=validated_data['hobbies']
+                                      #   birthday=validated_data['birthday'],
+                                      #   idcard_number=validated_data['idcard_number'],
+                                      #   hobbies=validated_data['hobbies']
                                       )
 
         return newuser
