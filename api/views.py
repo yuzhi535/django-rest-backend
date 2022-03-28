@@ -4,6 +4,7 @@
 # 17:42   当前系统时间
 # PyCharm   创建文件的IDE名称
 from django.contrib import messages
+from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import FormView
@@ -31,27 +32,39 @@ def show(request):
 
 @api_view(['POST'])
 def login(request):
-    data = request.POST
-    passwd = data['passwd']
-    phonenumber = data['phonenumber']
-    user = authenticate(phone_number=phonenumber, password=passwd)
-    if user:
-        ret = {'id': user.id, 'status': 200}
-        return JsonResponse(ret)
-    return JsonResponse({'status': 404})
+    password = request.POST.get('password')
+    phone_number = request.POST.get('phone_number')
+    user = authenticate(phone_number=phone_number, password=password)
+    if not user:
+        if not CustomUser.objects.get(phone_number=phone_number):
+            return JsonResponse({'msg': "用户不存在", 'status': 404})
+        else:
+            return JsonResponse({'msg': "密码输入错误", 'status': 404})
+    else:
+        return JsonResponse({'id': user.id, 'msg': "登录成功！", 'status': 200})
 
 
 @api_view(['POST'])
 def register(request):
     phone_number = request.POST.get('phone_number')
-    # 获取用户第一次输入的密码
-    password1 = request.POST.get('password1')
-    # 获取用户输入的第二次密码
+    try:
+        password1 = request.POST.get('password1')
+        password1 = password_long(password1)
+    except Exception as e:
+        return HttpResponse(content=f'{format(e)}')
     password2 = request.POST.get('password2')
     name = request.POST.get('name')
     gender = request.POST.get('gender')
-    height = request.POST.get('height')
-    weight = request.POST.get('weight')
+    try:
+        height = request.POST.get('height')
+        height = more_than(height)
+    except Exception as e:
+        return HttpResponse(content=f'{format(e)}')
+    try:
+        weight = request.POST.get('weight')
+        weight = more_than(weight)
+    except Exception as e:
+        return HttpResponse(content=f'{format(e)}')
     avatar = request.FILES.get('avatar')
     birthday = request.POST.get('birthday')
     idcard_number = request.POST.get('idcard_number')
@@ -63,36 +76,60 @@ def register(request):
     else:
         if password1 == password2:
             password = make_password(password1)
-            instance1 = CustomUser.objects.create(
-                phone_number=phone_number,
-                password=password,
-                gender=gender,
-            )
-            instance2 = User.objects.create(
-                user=instance1,
-                name=name,
-                height=height,
-                weight=weight,
-                birthday=birthday,
-                hobbies=hobbies,
-                idcard_number=idcard_number,
-                avatar=avatar,
-            )
-            
+            try:
+                instance1 = CustomUser.objects.create(
+                    phone_number=phone_number,
+                    password=password,
+                    gender=gender,
+                )
+                instance2 = User.objects.create(
+                    user=instance1,
+                    name=name,
+                    height=height,
+                    weight=weight,
+                    birthday=birthday,
+                    hobbies=hobbies,
+                    idcard_number=idcard_number,
+                    avatar=avatar,
+                )
             # return HttpResponse(content=f'avatar={avatar}fucku')
-            
-            return JsonResponse(data={
-                "phone_number": instance1.phone_number,
-                "password": instance1.password,
-                "gender": instance1.gender,
-                "name": instance2.name,
-                "height": instance2.height,
-                "weight": instance2.weight,
-                "birthday": instance2.birthday,
-                "hobbies": instance2.hobbies,
-                "idcard_number": instance2.idcard_number,
-                "avatar": f'{instance2.avatar}' if instance2.avatar else 'none'
-            }, status=200)
+            except(TypeError, ValueError, IntegrityError):
+                CustomUser.objects.get(phone_number=phone_number).delete()
+                return JsonResponse({'msg': "注册信息有误,大概率是用户名未填", 'status': 400})
+            else:
+                return JsonResponse(data={
+                    "phone_number": instance1.phone_number,
+                    "password": instance1.password,
+                    "gender": instance1.gender,
+                    "name": instance2.name,
+                    "height": instance2.height,
+                    "weight": instance2.weight,
+                    "birthday": instance2.birthday,
+                    "hobbies": instance2.hobbies,
+                    "idcard_number": instance2.idcard_number,
+                    "avatar": f'{instance2.avatar}' if instance2.avatar else 'none'
+                }, status=200)
+        else:
+            return JsonResponse({'msg': "两次密码输入不同", 'status': 400})
+
+
+# 密码小于6位异常
+def password_long(pwd):
+    if len(pwd) >= 6:
+        return pwd
+    else:
+        pwd_error = Exception('密码长度不能小于6位')
+        raise pwd_error
+
+
+# 身高体重必须大于0异常
+def more_than(hw):
+    if hw:
+        if int(hw) > 0:
+            return hw
+        else:
+            zero_error = Exception('身高或体重不可以是负数')
+            raise zero_error
 
 
 class FileUploadView(views.APIView):

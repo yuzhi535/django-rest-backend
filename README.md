@@ -10,14 +10,9 @@ a  backend for my school homework
 
 * 用户名
 * 密码
-* 生日
-* 身高
-* 体重
 * 手机号
-* 姓名
-* 头像
-* 生日
-* 身份证号
+* 性别
+
 
 **以上使用form-data提交**
 
