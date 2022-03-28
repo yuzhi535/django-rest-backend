@@ -37,9 +37,9 @@ def login(request):
     user = authenticate(phone_number=phone_number, password=password)
     if not user:
         if not CustomUser.objects.get(phone_number=phone_number):
-            return JsonResponse({'status': 404})  # 用户不存在
+            return JsonResponse({'status': 'A404'})  # 用户不存在
         else:
-            return JsonResponse({'status': 404})  # 密码输入错误
+            return JsonResponse({'status': 'B404'})  # 密码输入错误
     else:
         return JsonResponse({'id': user.id, 'status': 200})
 
@@ -72,7 +72,7 @@ def register(request):
 
     user = CustomUser.objects.filter(phone_number=phone_number)
     if user:
-        return JsonResponse({'status': 400})
+        return JsonResponse({'status': 'C400'})
     else:
         if password1 == password2:
             password = make_password(password1)
@@ -95,7 +95,7 @@ def register(request):
             # return HttpResponse(content=f'avatar={avatar}fucku')
             except(TypeError, ValueError, IntegrityError):
                 CustomUser.objects.get(phone_number=phone_number).delete()
-                return JsonResponse({'status': 400})
+                return JsonResponse({'status': 'A400'})
             else:
                 return JsonResponse(data={
                     "phone_number": instance1.phone_number,
@@ -110,7 +110,7 @@ def register(request):
                     "avatar": f'{instance2.avatar}' if instance2.avatar else 'none'
                 }, status=200)
         else:
-            return JsonResponse({'status': 400})
+            return JsonResponse({'status': 'B400'})
 
 
 # 密码小于6位异常
