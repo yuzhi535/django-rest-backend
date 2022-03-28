@@ -37,11 +37,11 @@ def login(request):
     user = authenticate(phone_number=phone_number, password=password)
     if not user:
         if not CustomUser.objects.get(phone_number=phone_number):
-            return JsonResponse({'msg': "用户不存在", 'status': 404})
+            return JsonResponse({'status': 404})  # 用户不存在
         else:
-            return JsonResponse({'msg': "密码输入错误", 'status': 404})
+            return JsonResponse({'status': 404})  # 密码输入错误
     else:
-        return JsonResponse({'id': user.id, 'msg': "登录成功！", 'status': 200})
+        return JsonResponse({'id': user.id, 'status': 200})
 
 
 @api_view(['POST'])
@@ -72,7 +72,7 @@ def register(request):
 
     user = CustomUser.objects.filter(phone_number=phone_number)
     if user:
-        return JsonResponse({'msg': '该用户已注册', 'status': 400})
+        return JsonResponse({'status': 400})
     else:
         if password1 == password2:
             password = make_password(password1)
@@ -95,7 +95,7 @@ def register(request):
             # return HttpResponse(content=f'avatar={avatar}fucku')
             except(TypeError, ValueError, IntegrityError):
                 CustomUser.objects.get(phone_number=phone_number).delete()
-                return JsonResponse({'msg': "注册信息有误,大概率是用户名未填", 'status': 400})
+                return JsonResponse({'status': 400})
             else:
                 return JsonResponse(data={
                     "phone_number": instance1.phone_number,
@@ -110,7 +110,7 @@ def register(request):
                     "avatar": f'{instance2.avatar}' if instance2.avatar else 'none'
                 }, status=200)
         else:
-            return JsonResponse({'msg': "两次密码输入不同", 'status': 400})
+            return JsonResponse({'status': 400})
 
 
 # 密码小于6位异常
