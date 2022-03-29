@@ -9,6 +9,7 @@ import numpy as np
 
 division = 100
 
+
 # 坐标变换
 def transform(data, center):
     for idx, (name, point) in enumerate(data.items()):
@@ -95,7 +96,7 @@ def split_video(video: str, base_path='./data', fps_limit=10) -> bool:
     if not os.path.exists(base_path):
         os.mkdir(base_path)
     delete_all_files(base_path)
-    
+
     cap = cv.VideoCapture(video)
     elapsed = 1 / fps_limit
     if cap.isOpened():

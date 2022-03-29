@@ -4,9 +4,11 @@
 # 17:42   当前系统时间
 # PyCharm   创建文件的IDE名称
 from django.contrib import messages
+from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.urls import reverse_lazy
 from django.views.generic import FormView
+from django.contrib.auth.hashers import make_password
 from rest_framework import views
 from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.authtoken.views import ObtainAuthToken
@@ -30,47 +32,104 @@ def show(request):
 
 @api_view(['POST'])
 def login(request):
-    data = request.data
-    passwd = data['passwd']
-    phonenumber = data['phonenumber']
-    user = authenticate(phone_number=phonenumber, password=passwd)
-    if user:
-        ret = {'id': user.id, 'status': 200}
-        return JsonResponse(ret)
-    return JsonResponse({'status': 404})
+    password = request.POST.get('password')
+    phone_number = request.POST.get('phone_number')
+    user = authenticate(phone_number=phone_number, password=password)
+    if not user:
+        if not CustomUser.objects.get(phone_number=phone_number):
+            return JsonResponse({'status': 'A404'})  # 用户不存在
+        else:
+            return JsonResponse({'status': 'B404'})  # 密码输入错误
+    else:
+        return JsonResponse({'id': user.id, 'status': 200})
 
 
 @api_view(['POST'])
 def register(request):
-    phone_number = request.data.get('phone_number')
-    # 获取用户第一次输入的密码
-    password1 = request.data.get('password1')
-    # 获取用户输入的第二次密码
-    password2 = request.data.get('password2')
-    name = request.data.get('name')
-    gender = request.data.get('gender')
-    height = request.data.get('height')
-    weight = request.data.get('weight')
-    avatar = request.data.get('avatar')
-    birthday = request.data.get('birthday')
-    idcard_number = request.data.get('idcard_number')
-    hobbies = request.data.get('hobbies')
+    phone_number = request.POST.get('phone_number')
+    try:
+        password1 = request.POST.get('password1')
+        password1 = password_long(password1)
+    except Exception as e:
+        return HttpResponse(content=f'{format(e)}')
+    password2 = request.POST.get('password2')
+    name = request.POST.get('name')
+    gender = request.POST.get('gender')
+    try:
+        height = request.POST.get('height')
+        height = more_than(height)
+    except Exception as e:
+        return HttpResponse(content=f'{format(e)}')
+    try:
+        weight = request.POST.get('weight')
+        weight = more_than(weight)
+    except Exception as e:
+        return HttpResponse(content=f'{format(e)}')
+    avatar = request.FILES.get('avatar')
+    birthday = request.POST.get('birthday')
+    idcard_number = request.POST.get('idcard_number')
+    hobbies = request.POST.get('hobbies')
 
     user = CustomUser.objects.filter(phone_number=phone_number)
     if user:
-        return JsonResponse({'msg': '该用户已注册', 'status': 400})
+        return JsonResponse({'status': 'C400'})
     else:
         if password1 == password2:
-            user_dict = {'phone_number': phone_number, 'password': password1, 'name': name,
-                         'gender': gender, 'height': height, 'weight': weight, 'avatar': avatar,
-                         'birthday': birthday, 'idcard_number': idcard_number, 'hobbies': hobbies}
-            user_serializer = UserModelSerializer(data=user_dict)
-            # 进行数据校验，保存
-            if user_serializer.is_valid():
-                user_serializer.save()
-                return JsonResponse({'msg': '注册成功', 'status': 200})
+            password = make_password(password1)
+            try:
+                instance1 = CustomUser.objects.create(
+                    phone_number=phone_number,
+                    password=password,
+                    gender=gender,
+                )
+                instance2 = User.objects.create(
+                    user=instance1,
+                    name=name,
+                    height=height,
+                    weight=weight,
+                    birthday=birthday,
+                    hobbies=hobbies,
+                    idcard_number=idcard_number,
+                    avatar=avatar,
+                )
+            # return HttpResponse(content=f'avatar={avatar}fucku')
+            except(TypeError, ValueError, IntegrityError):
+                CustomUser.objects.get(phone_number=phone_number).delete()
+                return JsonResponse({'status': 'A400'})
             else:
-                return Response({'msg': user_serializer.errors, 'status': 400})
+                return JsonResponse(data={
+                    "phone_number": instance1.phone_number,
+                    "password": instance1.password,
+                    "gender": instance1.gender,
+                    "name": instance2.name,
+                    "height": instance2.height,
+                    "weight": instance2.weight,
+                    "birthday": instance2.birthday,
+                    "hobbies": instance2.hobbies,
+                    "idcard_number": instance2.idcard_number,
+                    "avatar": f'{instance2.avatar}' if instance2.avatar else 'none'
+                }, status=200)
+        else:
+            return JsonResponse({'status': 'B400'})
+
+
+# 密码小于6位异常
+def password_long(pwd):
+    if len(pwd) >= 6:
+        return pwd
+    else:
+        pwd_error = Exception('密码长度不能小于6位')
+        raise pwd_error
+
+
+# 身高体重必须大于0异常
+def more_than(hw):
+    if hw:
+        if int(hw) > 0:
+            return hw
+        else:
+            zero_error = Exception('身高或体重不可以是负数')
+            raise zero_error
 
 
 class FileUploadView(views.APIView):

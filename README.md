@@ -10,26 +10,35 @@ a  backend for my school homework
 
 * 用户名
 * 密码
-* 生日
-* 身高
-* 体重
 * 手机号
-* 姓名
-* 头像
-* 生日
-* 身份证号
+* 性别
+
 
 **以上使用form-data提交**
 
 ### 返回
 
 * token（**暂定**）
-* user_ID
+* 手机号
+* 密码
+* 性别
+* 用户名
+* 身高
+* 体重
+* 生日
+* 爱好
+* 身份证号
+* 头像
 * status： 200
 
 ### 若失败
 
-* status： 404
+* status：A400
+* 'msg1': "注册信息有误,大概率是用户名未填"
+* status：B400
+* 'msg2': "两次密码输入不同"
+* status：C400
+* 'msg3': "该用户已注册"
 
 ## 登陆接口
 
@@ -48,7 +57,10 @@ a  backend for my school homework
 
 ### 若失败
 
-* status： 404
+* status：A404
+* 'msg1': "用户不存在"
+* status：B404
+* 'msg2': "密码输入错误"
 
 ## 上传视频接口
 
