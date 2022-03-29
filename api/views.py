@@ -36,12 +36,16 @@ def login(request):
     phone_number = request.POST.get('phone_number')
     user = authenticate(phone_number=phone_number, password=password)
     if not user:
-        if not CustomUser.objects.get(phone_number=phone_number):
-            return JsonResponse({'status': 'A404'})  # 用户不存在
-        else:
-            return JsonResponse({'status': 'B404'})  # 密码输入错误
+        try:
+            if not CustomUser.objects.get(phone_number=phone_number):
+                return JsonResponse({'status': 'A404'})  # 用户不存在
+            else:
+                return JsonResponse({'status': 'B404'})  # 密码输入错误
+        except CustomUser.DoesNotExist:
+                return JsonResponse({'status': 'A404'})
     else:
         return JsonResponse({'id': user.id, 'status': 200})
+
 
 
 @api_view(['POST'])
