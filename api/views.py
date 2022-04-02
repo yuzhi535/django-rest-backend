@@ -141,16 +141,23 @@ class FileUploadView(views.APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, filename, format=None):
-        file_obj = request.data['file']
-        course = request.data.get('course')
-        userID = request.data.get('userID')
+        # file_obj = request.data['file']
+        file_obj = request.FILES.get("file")
+        course = request.post.get('course')
+        userID = request.post.get('userID')
         assert course is not None  # have to do this!!!
         assert userID is not None
+        assert file_obj is not None
 
         # @todo 这里根据用户id，每个用户id创建一个目录，并且在用户目录里面根据课程创建一个目录，视频存到课程目录里面。如果考虑次数，则可能需要对视频重命名。
         # 不够先别这么做吧。
+        if not os.path.exists(userID):
+            os.mkdir(userID)
 
-        with open(filename, 'wb') as f:
+        if not os.path.exists(os.path.join(userID, course)):
+            os.mkdir(os.path.join(userID, course))
+        outpath = os.path.join(os.path.join(userID, course, filename))
+        with open(outpath, 'wb') as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
         return JsonResponse({'status': 204})
