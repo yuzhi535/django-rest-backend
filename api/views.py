@@ -3,6 +3,8 @@
 # 11/2/22   当前系统日期
 # 17:42   当前系统时间
 # PyCharm   创建文件的IDE名称
+import os
+
 from django.contrib import messages
 from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
@@ -23,7 +25,7 @@ from backend import forms
 from backend.models import User, Course, CustomUser
 from django.contrib.auth import authenticate, login
 
-from backend.serializers import UserModelSerializer
+import paddlehub as hub
 
 
 def show(request):
@@ -42,10 +44,9 @@ def login(request):
             else:
                 return JsonResponse({'status': 'B404'})  # 密码输入错误
         except CustomUser.DoesNotExist:
-                return JsonResponse({'status': 'A404'})
+            return JsonResponse({'status': 'A404'})
     else:
         return JsonResponse({'id': user.id, 'status': 200})
-
 
 
 @api_view(['POST'])
@@ -141,6 +142,14 @@ class FileUploadView(views.APIView):
 
     def post(self, request, filename, format=None):
         file_obj = request.data['file']
+        course = request.data.get('course')
+        userID = request.data.get('userID')
+        assert course is not None  # have to do this!!!
+        assert userID is not None
+
+        # @todo 这里根据用户id，每个用户id创建一个目录，并且在用户目录里面根据课程创建一个目录，视频存到课程目录里面。如果考虑次数，则可能需要对视频重命名。
+        # 不够先别这么做吧。
+
         with open(filename, 'wb') as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
@@ -158,3 +167,50 @@ class CustomAuthToken(ObtainAuthToken):
             'token': token.key,
             'user_id': user.pk,
         })
+
+
+# @TODO predict and process
+class Predict(APIView):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.model = hub.Module(name='openpose_body_estimation')
+
+    def post(self, requests):
+        return requests
+
+    def predict(self, img):
+        '''
+        @ todo just predict and return candidate points
+        '''
+        pass
+
+    def split_video(self, vid):
+        '''
+        @ todo split a video to frames. return a list of a quantity of images
+        @ note  use opencv
+        '''
+        pass
+
+    def process(self, ):
+        '''
+        @ todo we mainly use process
+        '''
+        pass
+
+    def dis(self, pos1, pos2):
+        '''
+        @ todo calculate the distance between two points in an image
+        '''
+        pass
+
+    def body_dis(self, body1, body2):
+        '''
+        @ todo calculate the total distance between two bodies of a frame
+        '''
+        pass
+
+    def dynamic_time_warping(self, series1, series2):
+        '''
+        @ todo DTW
+        '''
+        pass

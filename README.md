@@ -1,6 +1,6 @@
 # django-rest-backend
 
-a  backend for my school homework
+a backend for my school homework
 
 ---
 
@@ -12,7 +12,6 @@ a  backend for my school homework
 * 密码
 * 手机号
 * 性别
-
 
 **以上使用form-data提交**
 
@@ -81,5 +80,25 @@ a  backend for my school homework
 * 用户token
 * 文件名
 * 课程
+
+### 返回
+
+* 状态： 是否成功接收视频
+
+**form-data**
+
+## 预测接口
+
+### 必填
+
+- 用户ID
+- 文件名
+- 课程
+
+### 返回
+
+- 预测完成的视频
+- 分数
+- 评价
 
 **form-data**
