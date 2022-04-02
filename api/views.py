@@ -143,8 +143,8 @@ class FileUploadView(views.APIView):
     def post(self, request, filename, format=None):
         # file_obj = request.data['file']
         file_obj = request.FILES.get("file")
-        course = request.post.get('course')
-        userID = request.post.get('userID')
+        course = request.POST.get('course')
+        userID = request.POST.get('userID')
         assert course is not None  # have to do this!!!
         assert userID is not None
         assert file_obj is not None
