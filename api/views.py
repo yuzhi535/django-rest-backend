@@ -1,10 +1,4 @@
-# *_coding=utf-8_*
-# yuxi   当前系统用户
-# 11/2/22   当前系统日期
-# 17:42   当前系统时间
-# PyCharm   创建文件的IDE名称
-import os
-
+from __future__ import division
 from django.contrib import messages
 from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
@@ -26,6 +20,13 @@ from backend.models import User, Course, CustomUser
 from django.contrib.auth import authenticate, login
 
 import paddlehub as hub
+import cv2 as cv
+import time
+import pandas as pd
+import os
+import numpy as np
+
+division = 100
 
 
 def show(request):
@@ -148,15 +149,19 @@ class FileUploadView(views.APIView):
         assert course is not None  # have to do this!!!
         assert userID is not None
         assert file_obj is not None
-
-        # @todo 这里根据用户id，每个用户id创建一个目录，并且在用户目录里面根据课程创建一个目录，视频存到课程目录里面。如果考虑次数，则可能需要对视频重命名。
-        # 不够先别这么做吧。
+        """
+        这里根据用户id，每个用户id创建一个目录，并且在用户目录里面根据课程创建一个目录，视频存到课程目录里面。
+        # 如果考虑次数，则可能需要对视频重命名。
+        """
         if not os.path.exists(userID):
             os.mkdir(userID)
-
         if not os.path.exists(os.path.join(userID, course)):
             os.mkdir(os.path.join(userID, course))
         outpath = os.path.join(os.path.join(userID, course, filename))
+        # if os.listdir():
+        #     count = len([lists for lists in os.listdir(os.path.join(userID, course)) if
+        #                  os.path.isfile(os.path.join(os.path.join(userID, course), lists))])
+        #     outpath = str(count) + outpath
         with open(outpath, 'wb') as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
@@ -176,48 +181,165 @@ class CustomAuthToken(ObtainAuthToken):
         })
 
 
-# @TODO predict and process
+# predict and process
 class Predict(APIView):
+    course = ""
+    userID = ""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.model = hub.Module(name='openpose_body_estimation')
 
-    def post(self, requests):
-        return requests
+    def post(self, request):
+        self.course = request.POST.get('course')
+        self.userID = request.POST.get('userID')
+        filename = 'test.mp4'
+
+        uc_path = os.path.join(self.userID, self.course)
+        split_path = os.path.join(uc_path, 'test_split')
+        uv_path = os.path.join(self.userID, self.course, filename)
+        pro_path = os.path.join(uc_path, 'pro')
+
+        self.split_video(uv_path, base_path=split_path)
+
+        model = hub.Module(name='openpose_body_estimation')
+        self.process(model, split_path, output_path=pro_path)
+
+        out = self.process_csv(base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
+        criterion = self.process_csv(base_path=pro_path, output_path=os.path.join('course', self.course, 'pro_csv'))
+        cost = self.dynamic_time_warping(criterion, out)
+        print(cost)
+        return JsonResponse({'status': 204})
 
     def predict(self, img):
-        '''
-        @ todo just predict and return candidate points
-        '''
+        """
+        just predict and return candidate points
+        """
         pass
 
-    def split_video(self, vid):
-        '''
-        @ todo split a video to frames. return a list of a quantity of images
-        @ note  use opencv
-        '''
-        pass
+    def transform(self, data, center):
+        for idx, (name, point) in enumerate(data.items()):
+            print(type(center))
+            print(type(point))
+            if point.any():
+                point -= center
 
-    def process(self, ):
-        '''
-        @ todo we mainly use process
-        '''
-        pass
+    def delete_all_files(self, dir: str):
+        for file in os.listdir(dir):
+            os.remove(os.path.join(dir, file))
+
+    def save_csv(self, data, filename, base_dir='./work'):
+        dat = pd.DataFrame(data)
+        dat.index = ['x', 'y']
+        dat.to_csv(os.path.join(base_dir, filename))
+
+    def process_csv(self, base_path='output', thresh=.3, output_path='csv'):
+        sz = len(os.listdir(base_path)) // 3  # 3个文件一套
+        if not os.path.exists(output_path):
+            os.mkdir(output_path)
+        else:
+            self.delete_all_files(output_path)  # 删除先前所有文件
+
+        series = []
+
+        pos_name = ('nose', 'neck', 'rshoulder', 'relbow', 'rhand', 'lshoulder',
+                    'lelbow', 'lhand', 'rhip', 'rknee', 'rankle', 'lhip', 'lknee',
+                    'lankle')
+
+        for file in range(sz):
+            candidate_dat = pd.read_csv(os.path.join(base_path, f'{file}_candidate.csv'))
+            subset_dat = pd.read_csv(os.path.join(base_path, f'{file}_subset.csv'))
+            # print(subset_dat.shape)
+            if candidate_dat.empty:
+                print('无人')
+                continue
+            if subset_dat.shape[0] > 1:
+                print('多人！')
+                continue
+
+            pos = {}
+
+            # 只需要看到14个就够了，不需要脸部数据
+            for idx in range(1, 15):
+                k = subset_dat.loc[0][idx]
+                if k == -1:
+                    pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
+                    continue
+                elif candidate_dat.loc[k][3] < thresh:
+                    pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
+                    continue
+                else:
+                    pos[pos_name[idx - 1]] = np.array([int(candidate_dat.loc[k][1]), int(candidate_dat.loc[k][2])])
+            self.transform(pos, pos['neck'].copy())
+            self.save_csv(pos, filename=f'{file}.csv', base_dir=output_path)
+            series.append(pos)
+        return series
+
+    def process(self, model, base_path='./data', output_path='output'):
+        if not os.path.exists(output_path):
+            os.mkdir(output_path)
+        else:
+            self.delete_all_files(output_path)
+        for file in os.listdir(base_path):
+            img = cv.imread(os.path.join(base_path, file))
+            img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+            ret = self.model.predict(img)
+            out_img = ret['data']
+            out_img = cv.cvtColor(out_img, cv.COLOR_RGB2BGR)
+            cv.imwrite(os.path.join(output_path, f'{file[:-4]}_res.jpg'), out_img)
+            candidate = ret['candidate']
+            subset = ret['subset']
+            candidate_dat = pd.DataFrame(candidate)
+            subset_dat = pd.DataFrame(subset)
+            candidate_dat.to_csv(os.path.join(output_path, f'{file[:-4]}_candidate.csv'))
+            subset_dat.to_csv(os.path.join(output_path, f'{file[:-4]}_subset.csv'))
+
+    def split_video(self, video: str, base_path='./data', fps_limit=10) -> bool:
+        """
+        split a video to frames. return a list of a quantity of images
+        use opencv
+        """
+        if not os.path.exists(base_path):
+            os.mkdir(base_path)
+        self.delete_all_files(base_path)
+
+        cap = cv.VideoCapture(video)
+        elapsed = 1 / fps_limit
+        if cap.isOpened():
+            prev = time.time()
+            i = 0
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                elapsed_time = time.time() - prev
+                if elapsed_time > elapsed:
+                    prev = time.time()
+                    cv.imwrite(os.path.join(base_path, f'{i}.jpg'), frame)
+                    i += 1
+            return True
+        return False
 
     def dis(self, pos1, pos2):
-        '''
-        @ todo calculate the distance between two points in an image
-        '''
-        pass
+        if np.isnan(pos1).any() or np.isnan(pos2).any():
+            return 0
+        ans = (pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2
+        return ans
 
     def body_dis(self, body1, body2):
-        '''
-        @ todo calculate the total distance between two bodies of a frame
-        '''
-        pass
+        ans = 0
+        for idx, (name, point1) in enumerate(body1.items()):
+            point2 = body2[name]
+            ans += self.dis(point1, point2)
+        return ans
 
     def dynamic_time_warping(self, series1, series2):
-        '''
-        @ todo DTW
-        '''
-        pass
+        l1, l2 = len(series1), len(series2)
+        dp = [[0x7f7f7f7f for j in range(l2 + 1)] for i in range(l1 + 1)]
+        dp[0][0] = 0
+
+        for i in range(1, l1 + 1):
+            for j in range(1, l2 + 1):
+                cost = self.body_dis(series1[i - 1], series2[j - 1])
+                dp[i][j] = cost + min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
+        return dp[l1][l2] / division
