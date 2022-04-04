@@ -202,8 +202,7 @@ class Predict(APIView):
 
         self.split_video(uv_path, output_path=split_path)
 
-        model = hub.Module(name='openpose_body_estimation')
-        self.process(model, split_path, output_path=pro_path)
+        self.process(self.model, split_path, output_path=pro_path)
 
         out = self.process_csv(base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
         criterion = self.process_csv(base_path=pro_path, output_path=os.path.join('course', self.course, 'pro_csv'))
@@ -243,7 +242,13 @@ class Predict(APIView):
         else:
             self.delete_all_files(output_path)  # 删除先前所有文件
 
-        series = [[] for j in range(6)]
+        series = []
+        heads = []
+        rarms = []
+        larms = []
+        rlegs = []
+        llegs = []
+
 
         pos_name = ('nose', 'neck',
                     'rshoulder', 'relbow', 'rhand',
@@ -277,21 +282,13 @@ class Predict(APIView):
                     pos[pos_name[idx - 1]] = np.array([int(candidate_dat.loc[k][1]), int(candidate_dat.loc[k][2])])
             self.transform(pos, pos['neck'].copy())
             self.save_csv(pos, filename=f'{file}.csv', base_dir=output_path)
-            series[0].append(pos[0])
-            series[0].append(pos[1])
-            series[1].append(pos[2])
-            series[1].append(pos[3])
-            series[1].append(pos[4])
-            series[2].append(pos[5])
-            series[2].append(pos[6])
-            series[2].append(pos[7])
-            series[3].append(pos[8])
-            series[3].append(pos[9])
-            series[3].append(pos[10])
-            series[4].append(pos[11])
-            series[4].append(pos[12])
-            series[4].append(pos[13])
-        return series
+            series.append(pos)
+            heads.append({'nose': pos.get('nose'), 'neck': pos.get('neck')})
+            rarms.append({'rshoulder': pos.get('rshoulder'), 'relbow': pos.get('relbow'), 'rhand': pos.get('rhand')})
+            larms.append({'lshoulder': pos.get('lshoulder'), 'lelbow': pos.get('lelbow'), 'lhand': pos.get('lhand')})
+            rlegs.append({'rhip': pos.get('rhip'), 'rknee': pos.get('rknee'), 'rankle': pos.get('rankle')})
+            llegs.append({'lhip': pos.get('lhip'), 'lknee': pos.get('lknee'), 'lankle': pos.get('lankle')})
+        return heads, rarms, larms, rlegs, llegs  # 返回元组，方便后期索引
 
     def process(self, model, base_path='./data', output_path='output'):
         if not os.path.exists(output_path):
