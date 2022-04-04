@@ -49,6 +49,12 @@ def login(request):
     else:
         return JsonResponse({'id': user.id, 'status': 200})
 
+@api_view(['POST'])
+def getavatar(request):
+    phone_number = request.POST.get('phone_number')
+    user_id = CustomUser.objects.get(phone_number=phone_number).id
+    avatar = User.objects.get(user_id=user_id).avatar
+    return JsonResponse(data={'avatar': f'{avatar}'})
 
 @api_view(['POST'])
 def register(request):
@@ -113,7 +119,7 @@ def register(request):
                     "birthday": instance2.birthday,
                     "hobbies": instance2.hobbies,
                     "idcard_number": instance2.idcard_number,
-                    "avatar": f'{instance2.avatar}' if instance2.avatar else 'none',
+                    "avatar_status": '1' if instance2.avatar else '0',
                     "status": '200'
                 })
         else:
