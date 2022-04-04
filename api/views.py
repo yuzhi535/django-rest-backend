@@ -197,18 +197,23 @@ class Predict(APIView):
 
         uc_path = os.path.join(self.userID, self.course)
         split_path = os.path.join(uc_path, 'test_split')
-        uv_path = os.path.join(self.userID, self.course, filename)
+        uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
 
-        self.split_video(uv_path, base_path=split_path)
+        self.split_video(uv_path, output_path=split_path)
 
         model = hub.Module(name='openpose_body_estimation')
         self.process(model, split_path, output_path=pro_path)
 
         out = self.process_csv(base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
         criterion = self.process_csv(base_path=pro_path, output_path=os.path.join('course', self.course, 'pro_csv'))
-        cost = self.dynamic_time_warping(criterion, out)
-        print(cost)
+        cost_head = self.dynamic_time_warping(criterion[0], out[0])
+        cost_rarm = self.dynamic_time_warping(criterion[1], out[1])
+        cost_larm = self.dynamic_time_warping(criterion[2], out[2])
+        cost_rleg = self.dynamic_time_warping(criterion[3], out[3])
+        cost_lleg = self.dynamic_time_warping(criterion[4], out[4])
+
+        print(cost_head)
         return JsonResponse({'status': 204})
 
     def predict(self, img):
@@ -219,8 +224,6 @@ class Predict(APIView):
 
     def transform(self, data, center):
         for idx, (name, point) in enumerate(data.items()):
-            print(type(center))
-            print(type(point))
             if point.any():
                 point -= center
 
@@ -240,11 +243,13 @@ class Predict(APIView):
         else:
             self.delete_all_files(output_path)  # 删除先前所有文件
 
-        series = []
+        series = [[] for j in range(6)]
 
-        pos_name = ('nose', 'neck', 'rshoulder', 'relbow', 'rhand', 'lshoulder',
-                    'lelbow', 'lhand', 'rhip', 'rknee', 'rankle', 'lhip', 'lknee',
-                    'lankle')
+        pos_name = ('nose', 'neck',
+                    'rshoulder', 'relbow', 'rhand',
+                    'lshoulder', 'lelbow', 'lhand',
+                    'rhip', 'rknee', 'rankle',
+                    'lhip', 'lknee', 'lankle')
 
         for file in range(sz):
             candidate_dat = pd.read_csv(os.path.join(base_path, f'{file}_candidate.csv'))
@@ -272,7 +277,20 @@ class Predict(APIView):
                     pos[pos_name[idx - 1]] = np.array([int(candidate_dat.loc[k][1]), int(candidate_dat.loc[k][2])])
             self.transform(pos, pos['neck'].copy())
             self.save_csv(pos, filename=f'{file}.csv', base_dir=output_path)
-            series.append(pos)
+            series[0].append(pos[0])
+            series[0].append(pos[1])
+            series[1].append(pos[2])
+            series[1].append(pos[3])
+            series[1].append(pos[4])
+            series[2].append(pos[5])
+            series[2].append(pos[6])
+            series[2].append(pos[7])
+            series[3].append(pos[8])
+            series[3].append(pos[9])
+            series[3].append(pos[10])
+            series[4].append(pos[11])
+            series[4].append(pos[12])
+            series[4].append(pos[13])
         return series
 
     def process(self, model, base_path='./data', output_path='output'):
@@ -294,14 +312,14 @@ class Predict(APIView):
             candidate_dat.to_csv(os.path.join(output_path, f'{file[:-4]}_candidate.csv'))
             subset_dat.to_csv(os.path.join(output_path, f'{file[:-4]}_subset.csv'))
 
-    def split_video(self, video: str, base_path='./data', fps_limit=10) -> bool:
+    def split_video(self, video: str, output_path='./data', fps_limit=10) -> bool:
         """
         split a video to frames. return a list of a quantity of images
         use opencv
         """
-        if not os.path.exists(base_path):
-            os.mkdir(base_path)
-        self.delete_all_files(base_path)
+        if not os.path.exists(output_path):
+            os.mkdir(output_path)
+        self.delete_all_files(output_path)
 
         cap = cv.VideoCapture(video)
         elapsed = 1 / fps_limit
@@ -315,7 +333,7 @@ class Predict(APIView):
                 elapsed_time = time.time() - prev
                 if elapsed_time > elapsed:
                     prev = time.time()
-                    cv.imwrite(os.path.join(base_path, f'{i}.jpg'), frame)
+                    cv.imwrite(os.path.join(output_path, f'{i}.jpg'), frame)
                     i += 1
             return True
         return False
