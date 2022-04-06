@@ -13,17 +13,23 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-import api
-from django.contrib import admin
-from django.urls import path, include
-from api import views
 
-import backend
-from backend import views
+from django.contrib import admin
+
+from django.urls import path, re_path, include
+from django.views.static import serve
+from django.conf import settings
+
+from django.conf.urls import url
+from django.contrib import admin
+
+from django.conf.urls.static import static
+from django.urls import path, include
 
 urlpatterns = [
-    path('api/', include("api.urls")),
-    # path('api/login', api.views.login),
-    # path('api/register', api.views.register),
-    # path('api/example/login', api.views.CustomAuthToken.as_view())
-]
+                  path('api/', include("api.urls")),
+                  # media配置——配合settings中的MEDIA_ROOT的配置，就可以在浏览器的地址栏访问media文件夹及里面的文件了
+                  # re_path(r'media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+                  # url(r'media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT})
+              ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL,
+                                                                                         document_root=settings.STATIC_ROOT)
