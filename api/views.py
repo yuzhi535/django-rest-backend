@@ -47,7 +47,10 @@ def login(request):
         except CustomUser.DoesNotExist:
             return JsonResponse({'status': 'A404'})
     else:
-        return JsonResponse({'id': user.id, 'status': 200})
+        name = User.objects.get(user_id=user.id).name
+        return JsonResponse({'id': user.id,
+                             'name': name,
+                             'status': 200})
 
 @api_view(['POST'])
 def getavatar(request):
@@ -113,6 +116,7 @@ def register(request):
                     "phone_number": instance1.phone_number,
                     "password": instance1.password,
                     "gender": instance1.gender,
+                    "id": instance2.user_id,
                     "name": instance2.name,
                     "height": instance2.height,
                     "weight": instance2.weight,
@@ -153,18 +157,24 @@ class FileUploadView(views.APIView):
         file_obj = request.FILES.get("file")
         course = request.POST.get('course')
         userID = request.POST.get('userID')
-        assert course is not None  # have to do this!!!
-        assert userID is not None
-        assert file_obj is not None
+        try:
+            assert course is not None or not ""  # have to do this!!!
+            assert userID is not None or not ""
+            assert file_obj is not None
+        except AssertionError:
+            return JsonResponse({'status': 401})
         """
         这里根据用户id，每个用户id创建一个目录，并且在用户目录里面根据课程创建一个目录，视频存到课程目录里面。
         # 如果考虑次数，则可能需要对视频重命名。
         """
-        if not os.path.exists(userID):
-            os.mkdir(userID)
-        if not os.path.exists(os.path.join(userID, course)):
-            os.mkdir(os.path.join(userID, course))
-        outpath = os.path.join(os.path.join(userID, course, filename))
+        path = os.path.join(os.getcwd(), 'upload')
+        if not os.path.exists(path):
+            os.mkdir(path)
+        if not os.path.exists(os.path.join(path, userID)):
+            os.mkdir(os.path.join(path, userID))
+        if not os.path.exists(os.path.join(path, userID, course)):
+            os.mkdir(os.path.join(path, userID, course))
+        outpath = os.path.join(os.path.join(path, userID, course, filename))
         # if os.listdir():
         #     count = len([lists for lists in os.listdir(os.path.join(userID, course)) if
         #                  os.path.isfile(os.path.join(os.path.join(userID, course), lists))])
@@ -224,7 +234,22 @@ class Predict(APIView):
         print('larm', cost_larm)
         print('rleg', cost_rleg)
         print('lleg', cost_lleg)
-        return JsonResponse({'status': 204})
+
+        key = 100
+        evaluate = ""
+        if cost_head >= key:
+            evaluate.append("您的头部动作不标准")
+        if cost_rarm >= key:
+            evaluate.append("您的右臂动作不标准")
+        if cost_larm >= key:
+            evaluate.append("您的左臂动作不标准")
+        if cost_rleg >= key:
+            evaluate.append("您的右腿动作不标准")
+        if cost_lleg >= key:
+            evaluate.append("您的左腿动作不标准")
+
+        return JsonResponse({'status': 204,
+                             'evaluate': evaluate})
 
     def predict(self, img):
         """
