@@ -26,7 +26,7 @@ import pandas as pd
 import os
 import numpy as np
 
-division = 100
+division = 10000
 
 
 def show(request):
@@ -52,12 +52,14 @@ def login(request):
                              'name': name,
                              'status': 200})
 
+
 @api_view(['POST'])
 def getavatar(request):
     phone_number = request.POST.get('phone_number')
     user_id = CustomUser.objects.get(phone_number=phone_number).id
     avatar = User.objects.get(user_id=user_id).avatar
     return JsonResponse(data={'avatar': f'{avatar}'})
+
 
 @api_view(['POST'])
 def register(request):
@@ -107,7 +109,6 @@ def register(request):
                     idcard_number=idcard_number,
                     avatar=avatar,
                 )
-            # return HttpResponse(content=f'avatar={avatar}fucku')
             except(TypeError, ValueError, IntegrityError):
                 CustomUser.objects.get(phone_number=phone_number).delete()
                 return JsonResponse({'status': 'A400'})
@@ -167,7 +168,7 @@ class FileUploadView(views.APIView):
         这里根据用户id，每个用户id创建一个目录，并且在用户目录里面根据课程创建一个目录，视频存到课程目录里面。
         # 如果考虑次数，则可能需要对视频重命名。
         """
-        path = os.path.join(os.getcwd(), 'upload')
+        path = os.path.join(os.getcwd(), 'media')
         if not os.path.exists(path):
             os.mkdir(path)
         if not os.path.exists(os.path.join(path, userID)):
@@ -200,19 +201,18 @@ class CustomAuthToken(ObtainAuthToken):
 
 # predict and process
 class Predict(APIView):
-    course = ""
-    userID = ""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.model = hub.Module(name='openpose_body_estimation')
 
     def post(self, request):
-        self.course = request.POST.get('course')
-        self.userID = request.POST.get('userID')
-        filename = 'test.mp4'
+        course = request.POST.get('course')
+        userID = request.POST.get('userID')
+        filename = request.POST.get('filename')
+        # filename = 'test.mp4'
 
-        uc_path = os.path.join(self.userID, self.course)
+        uc_path = os.path.join('media', userID, course)
         split_path = os.path.join(uc_path, 'test_split')
         uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
@@ -222,7 +222,7 @@ class Predict(APIView):
         self.process(self.model, split_path, output_path=pro_path)
 
         out = self.process_csv(base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
-        criterion = self.process_csv(base_path=pro_path, output_path=os.path.join('course', self.course, 'pro_csv'))
+        criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'), output_path=os.path.join('course', course, 'pro_csv'))
         cost_head = self.dynamic_time_warping(criterion[0], out[0])
         cost_rarm = self.dynamic_time_warping(criterion[1], out[1])
         cost_larm = self.dynamic_time_warping(criterion[2], out[2])
@@ -235,21 +235,23 @@ class Predict(APIView):
         print('rleg', cost_rleg)
         print('lleg', cost_lleg)
 
-        key = 100
+        key = 10
         evaluate = ""
+        str = ["您的头部动作不标准", "您的右臂动作不标准", "您的左臂动作不标准", "您的右腿动作不标准", "您的左腿动作不标准"]
         if cost_head >= key:
-            evaluate.append("您的头部动作不标准")
+            evaluate = evaluate + str[0]
         if cost_rarm >= key:
-            evaluate.append("您的右臂动作不标准")
+            evaluate = evaluate + str[1]
         if cost_larm >= key:
-            evaluate.append("您的左臂动作不标准")
+            evaluate = evaluate + str[2]
         if cost_rleg >= key:
-            evaluate.append("您的右腿动作不标准")
+            evaluate = evaluate + str[3]
         if cost_lleg >= key:
-            evaluate.append("您的左腿动作不标准")
+            evaluate = evaluate + str[4]
 
-        return JsonResponse({'status': 204,
-                             'evaluate': evaluate})
+        return JsonResponse(data={'status': 204,
+                                  'evaluate': evaluate,
+                                  'url': f'http://127.0.0.1:8000/media/{userID}/{course}/{filename}'})
 
     def predict(self, img):
         """
@@ -393,4 +395,3 @@ class Predict(APIView):
                 cost = self.body_dis(series1[i - 1], series2[j - 1])
                 dp[i][j] = cost + min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
         return dp[l1][l2] / division
-
