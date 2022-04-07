@@ -1,4 +1,8 @@
 from __future__ import division
+
+from typing import Union
+import copy
+
 from django.contrib import messages
 from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
@@ -20,6 +24,7 @@ from backend.models import User, Course, CustomUser
 from django.contrib.auth import authenticate, login
 
 import paddlehub as hub
+import paddle
 import cv2 as cv
 import time
 import pandas as pd
@@ -30,7 +35,7 @@ division = 10000
 
 
 def show(request):
-    return HttpResponse("hello world")
+    return HttpResponse("fucku")
 
 
 @api_view(['POST'])
@@ -221,8 +226,11 @@ class Predict(APIView):
 
         self.process(self.model, split_path, output_path=pro_path)
 
+        self.make_video(pro_path, uc_path, len(os.listdir(pro_path)) // 3, filename)
+
         out = self.process_csv(base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
-        criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'), output_path=os.path.join('course', course, 'pro_csv'))
+        criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'),
+                                     output_path=os.path.join('course', course, 'pro_csv'))
         cost_head = self.dynamic_time_warping(criterion[0], out[0])
         cost_rarm = self.dynamic_time_warping(criterion[1], out[1])
         cost_larm = self.dynamic_time_warping(criterion[2], out[2])
@@ -249,15 +257,10 @@ class Predict(APIView):
         if cost_lleg >= key:
             evaluate = evaluate + str[4]
 
+        filename = filename[:-4] + "_e.mp4"
         return JsonResponse(data={'status': 204,
                                   'evaluate': evaluate,
                                   'url': f'http://127.0.0.1:8000/media/{userID}/{course}/{filename}'})
-
-    def predict(self, img):
-        """
-        just predict and return candidate points
-        """
-        pass
 
     def transform(self, data, center):
         for idx, (name, point) in enumerate(data.items()):
@@ -335,7 +338,7 @@ class Predict(APIView):
         for file in os.listdir(base_path):
             img = cv.imread(os.path.join(base_path, file))
             img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-            ret = self.model.predict(img)
+            ret = self.predict(img)
             out_img = ret['data']
             out_img = cv.cvtColor(out_img, cv.COLOR_RGB2BGR)
             cv.imwrite(os.path.join(output_path, f'{file[:-4]}_res.jpg'), out_img)
@@ -395,3 +398,48 @@ class Predict(APIView):
                 cost = self.body_dis(series1[i - 1], series2[j - 1])
                 dp[i][j] = cost + min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
         return dp[l1][l2] / division
+
+    def predict(self, img: Union[str, np.ndarray], visualization: bool = True):
+        self.model.eval()
+        self.visualization = visualization
+        if isinstance(img, str):
+            orgImg = cv.imread(img)
+        else:
+            orgImg = img
+        data, imageToTest_padded, pad = self.model.transform(orgImg)
+        Mconv7_stage6_L1, Mconv7_stage6_L2 = self.model.forward(paddle.to_tensor(data))
+        Mconv7_stage6_L1 = Mconv7_stage6_L1.numpy()
+        Mconv7_stage6_L2 = Mconv7_stage6_L2.numpy()
+
+        heatmap_avg = self.model.remove_pad(Mconv7_stage6_L2, imageToTest_padded, orgImg, pad)
+        paf_avg = self.model.remove_pad(Mconv7_stage6_L1, imageToTest_padded, orgImg, pad)
+
+        all_peaks = self.model.get_peak(heatmap_avg)
+        connection_all, special_k = self.model.get_connection(all_peaks, paf_avg, orgImg)
+        candidate, subset = self.model.get_candidate(all_peaks, connection_all, special_k)
+
+        canvas = copy.deepcopy(orgImg)
+        canvas = self.model.draw_pose(canvas, candidate, subset)
+
+        results = {
+            'candidate': candidate,
+            'subset': subset,
+            'data': canvas}
+
+        return results
+
+    def make_video(self, base_path, output_path, count, filename):
+        img = cv.imread(os.path.join(base_path, '0_res.jpg'))
+        imgInfo = img.shape
+        size = (imgInfo[1], imgInfo[0])  # 宽高
+
+        fps = 1  # 视频每秒1帧
+        video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
+                               size)
+        for i in range(0, count):
+            fileName = os.path.join(base_path, str(i) + '_res.jpg')
+            img = cv.imread(fileName)  # 写入参数，参数是图片编码之前的数据
+            video.write(img)
+
+        video.release()
+        cv.destroyAllWindows()
