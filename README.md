@@ -65,25 +65,25 @@ a backend for my school homework
 
 ### 必填
 
-* 用户token
+* 用户ID
+* 课程名
 * 视频
 
 ### 返回
 
-* user_ID
-* token
+* status：204
 
-## 分析视频接口
+？？？                         ## 分析视频接口
 
-### 必填
+                            ### 必填
 
-* 用户token
-* 文件名
-* 课程
+                            * 用户token
+                            * 文件名
+                            * 课程
 
-### 返回
+                            ### 返回
 
-* 状态： 是否成功接收视频
+                            * 状态： 是否成功接收视频
 
 **form-data**
 
@@ -92,13 +92,13 @@ a backend for my school homework
 ### 必填
 
 - 用户ID
+- 课程名
 - 文件名
-- 课程
 
 ### 返回
 
-- 预测完成的视频
-- 分数
+- status：204
+- 预测完成的视频url
 - 评价
 
 **form-data**
