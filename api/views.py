@@ -1,4 +1,5 @@
 from __future__ import division
+from operator import mod
 
 from typing import Union
 import copy
@@ -6,11 +7,8 @@ import copy
 from django.contrib import messages
 from django.db import IntegrityError
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.urls import reverse_lazy
-from django.views.generic import FormView
 from django.contrib.auth.hashers import make_password
 from rest_framework import views
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import api_view
 from rest_framework.parsers import FileUploadParser, MultiPartParser, FormParser
@@ -19,7 +17,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
 
-from backend import forms
 from backend.models import User, Course, CustomUser
 from django.contrib.auth import authenticate, login
 
@@ -206,16 +203,15 @@ class CustomAuthToken(ObtainAuthToken):
 
 # predict and process
 class Predict(APIView):
+    model = hub.Module(name='openpose_body_estimation')
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.model = hub.Module(name='openpose_body_estimation')
 
     def post(self, request):
         course = request.POST.get('course')
         userID = request.POST.get('userID')
         filename = request.POST.get('filename')
-        # filename = 'test.mp4'
 
         uc_path = os.path.join('media', userID, course)
         split_path = os.path.join(uc_path, 'test_split')
@@ -224,14 +220,16 @@ class Predict(APIView):
 
         self.split_video(uv_path, output_path=split_path)
 
-        self.process(self.model, split_path, output_path=pro_path)
+        self.process(split_path, output_path=pro_path)
 
         try:
-            self.make_video(pro_path, uc_path, len(os.listdir(pro_path)) // 3, filename)
+            self.make_video(pro_path, uc_path, len(
+                os.listdir(pro_path)) // 3, filename)
         except AttributeError:
             return JsonResponse({'status': 403})
 
-        out = self.process_csv(base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
+        out = self.process_csv(
+            base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
         criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'),
                                      output_path=os.path.join('course', course, 'pro_csv'))
         cost_head = self.dynamic_time_warping(criterion[0], out[0])
@@ -245,11 +243,13 @@ class Predict(APIView):
         print('larm', cost_larm)
         print('rleg', cost_rleg)
         print('lleg', cost_lleg)
-        score = 100 - max(cost_head, cost_larm, cost_larm, cost_rleg, cost_lleg)
+        score = 100 - max(cost_head, cost_larm,
+                          cost_larm, cost_rleg, cost_lleg)
 
         key = 10
         evaluate = ""
-        str = ["您的头部动作不标准 ", "您的右臂动作不标准 ", "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
+        str = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
+               "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
         if cost_head >= key:
             evaluate = evaluate + str[0]
         if cost_rarm >= key:
@@ -261,10 +261,12 @@ class Predict(APIView):
         if cost_lleg >= key:
             evaluate = evaluate + str[4]
 
+        if evaluate == "": evaluate = "您的动作非常完美"
+
         filename = filename[:-4] + "_e.mp4"
         return JsonResponse(data={'status': 204,
                                   'evaluate': evaluate,
-                                  'url': f'media/{userID}/{course}/{filename}'})
+                                  'url': f'{userID}/{course}/{filename}'})
 
     def transform(self, data, center):
         for idx, (name, point) in enumerate(data.items()):
@@ -301,8 +303,10 @@ class Predict(APIView):
                     'lhip', 'lknee', 'lankle')
 
         for file in range(sz):
-            candidate_dat = pd.read_csv(os.path.join(base_path, f'{file}_candidate.csv'))
-            subset_dat = pd.read_csv(os.path.join(base_path, f'{file}_subset.csv'))
+            candidate_dat = pd.read_csv(os.path.join(
+                base_path, f'{file}_candidate.csv'))
+            subset_dat = pd.read_csv(os.path.join(
+                base_path, f'{file}_subset.csv'))
             # print(subset_dat.shape)
             if candidate_dat.empty:
                 print('无人')
@@ -323,18 +327,23 @@ class Predict(APIView):
                     pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
                     continue
                 else:
-                    pos[pos_name[idx - 1]] = np.array([int(candidate_dat.loc[k][1]), int(candidate_dat.loc[k][2])])
+                    pos[pos_name[idx - 1]] = np.array(
+                        [int(candidate_dat.loc[k][1]), int(candidate_dat.loc[k][2])])
             self.transform(pos, pos['neck'].copy())
             self.save_csv(pos, filename=f'{file}.csv', base_dir=output_path)
             series.append(pos)
             heads.append({'nose': pos.get('nose'), 'neck': pos.get('neck')})
-            rarms.append({'rshoulder': pos.get('rshoulder'), 'relbow': pos.get('relbow'), 'rhand': pos.get('rhand')})
-            larms.append({'lshoulder': pos.get('lshoulder'), 'lelbow': pos.get('lelbow'), 'lhand': pos.get('lhand')})
-            rlegs.append({'rhip': pos.get('rhip'), 'rknee': pos.get('rknee'), 'rankle': pos.get('rankle')})
-            llegs.append({'lhip': pos.get('lhip'), 'lknee': pos.get('lknee'), 'lankle': pos.get('lankle')})
+            rarms.append({'rshoulder': pos.get('rshoulder'), 'relbow': pos.get(
+                'relbow'), 'rhand': pos.get('rhand')})
+            larms.append({'lshoulder': pos.get('lshoulder'), 'lelbow': pos.get(
+                'lelbow'), 'lhand': pos.get('lhand')})
+            rlegs.append({'rhip': pos.get('rhip'), 'rknee': pos.get(
+                'rknee'), 'rankle': pos.get('rankle')})
+            llegs.append({'lhip': pos.get('lhip'), 'lknee': pos.get(
+                'lknee'), 'lankle': pos.get('lankle')})
         return heads, rarms, larms, rlegs, llegs  # 返回元组，方便后期索引
 
-    def process(self, model, base_path='./data', output_path='output'):
+    def process(self, base_path='./data', output_path='output'):
         if not os.path.exists(output_path):
             os.mkdir(output_path)
         else:
@@ -345,13 +354,16 @@ class Predict(APIView):
             ret = self.predict(img)
             out_img = ret['data']
             out_img = cv.cvtColor(out_img, cv.COLOR_RGB2BGR)
-            cv.imwrite(os.path.join(output_path, f'{file[:-4]}_res.jpg'), out_img)
+            cv.imwrite(os.path.join(
+                output_path, f'{file[:-4]}_res.jpg'), out_img)
             candidate = ret['candidate']
             subset = ret['subset']
             candidate_dat = pd.DataFrame(candidate)
             subset_dat = pd.DataFrame(subset)
-            candidate_dat.to_csv(os.path.join(output_path, f'{file[:-4]}_candidate.csv'))
-            subset_dat.to_csv(os.path.join(output_path, f'{file[:-4]}_subset.csv'))
+            candidate_dat.to_csv(os.path.join(
+                output_path, f'{file[:-4]}_candidate.csv'))
+            subset_dat.to_csv(os.path.join(
+                output_path, f'{file[:-4]}_subset.csv'))
 
     def split_video(self, video: str, output_path='./data', fps_limit=10) -> bool:
         """
@@ -400,30 +412,37 @@ class Predict(APIView):
         for i in range(1, l1 + 1):
             for j in range(1, l2 + 1):
                 cost = self.body_dis(series1[i - 1], series2[j - 1])
-                dp[i][j] = cost + min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
+                dp[i][j] = cost + min(dp[i - 1][j - 1],
+                                      dp[i - 1][j], dp[i][j - 1])
         return dp[l1][l2] / division
 
-    def predict(self, img: Union[str, np.ndarray], visualization: bool = True):
-        self.model.eval()
-        self.visualization = visualization
+    @staticmethod
+    def predict(img: Union[str, np.ndarray], visualization: bool = True):
+        Predict.model.eval()
+        visualization = visualization
         if isinstance(img, str):
             orgImg = cv.imread(img)
         else:
             orgImg = img
-        data, imageToTest_padded, pad = self.model.transform(orgImg)
-        Mconv7_stage6_L1, Mconv7_stage6_L2 = self.model.forward(paddle.to_tensor(data))
+        data, imageToTest_padded, pad = Predict.model.transform(orgImg)
+        Mconv7_stage6_L1, Mconv7_stage6_L2 = Predict.model.forward(
+            paddle.to_tensor(data))
         Mconv7_stage6_L1 = Mconv7_stage6_L1.numpy()
         Mconv7_stage6_L2 = Mconv7_stage6_L2.numpy()
 
-        heatmap_avg = self.model.remove_pad(Mconv7_stage6_L2, imageToTest_padded, orgImg, pad)
-        paf_avg = self.model.remove_pad(Mconv7_stage6_L1, imageToTest_padded, orgImg, pad)
+        heatmap_avg = Predict.model.remove_pad(
+            Mconv7_stage6_L2, imageToTest_padded, orgImg, pad)
+        paf_avg = Predict.model.remove_pad(
+            Mconv7_stage6_L1, imageToTest_padded, orgImg, pad)
 
-        all_peaks = self.model.get_peak(heatmap_avg)
-        connection_all, special_k = self.model.get_connection(all_peaks, paf_avg, orgImg)
-        candidate, subset = self.model.get_candidate(all_peaks, connection_all, special_k)
+        all_peaks = Predict.model.get_peak(heatmap_avg)
+        connection_all, special_k = Predict.model.get_connection(
+            all_peaks, paf_avg, orgImg)
+        candidate, subset = Predict.model.get_candidate(
+            all_peaks, connection_all, special_k)
 
         canvas = copy.deepcopy(orgImg)
-        canvas = self.model.draw_pose(canvas, candidate, subset)
+        canvas = Predict.model.draw_pose(canvas, candidate, subset)
 
         results = {
             'candidate': candidate,
@@ -438,7 +457,7 @@ class Predict(APIView):
         imgInfo = img.shape
         size = (imgInfo[1], imgInfo[0])  # 宽高
 
-        fps = 10  # 视频每秒1帧
+        fps = 1  # 视频每秒1帧
         video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
                                size)
         for i in range(0, count):
@@ -448,3 +467,4 @@ class Predict(APIView):
 
         video.release()
         cv.destroyAllWindows()
+
