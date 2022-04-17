@@ -242,10 +242,11 @@ class Predict(APIView):
         print('larm', cost_larm)
         print('rleg', cost_rleg)
         print('lleg', cost_lleg)
+        score = 100 - max(cost_head, cost_larm, cost_larm, cost_rleg, cost_lleg)
 
         key = 10
         evaluate = ""
-        str = ["您的头部动作不标准", "您的右臂动作不标准", "您的左臂动作不标准", "您的右腿动作不标准", "您的左腿动作不标准"]
+        str = ["您的头部动作不标准 ", "您的右臂动作不标准 ", "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
         if cost_head >= key:
             evaluate = evaluate + str[0]
         if cost_rarm >= key:
@@ -429,9 +430,12 @@ class Predict(APIView):
         return results
 
     def make_video(self, base_path, output_path, count, filename):
-        img = cv.imread(os.path.join(base_path, '0_res.jpg'))
-        imgInfo = img.shape
-        size = (imgInfo[1], imgInfo[0])  # 宽高
+        try:
+            img = cv.imread(os.path.join(base_path, '0_res.jpg'))
+            imgInfo = img.shape
+            size = (imgInfo[1], imgInfo[0])  # 宽高
+        except AttributeError:
+            return JsonResponse(status=403);
 
         fps = 1  # 视频每秒1帧
         video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,

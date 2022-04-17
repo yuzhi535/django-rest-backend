@@ -100,5 +100,7 @@ a backend for my school homework
 - status：204
 - 预测完成的视频url
 - 评价
+- status:403
+- msg:视频中没有人 或者 您距离摄像头太远了
 
 **form-data**
