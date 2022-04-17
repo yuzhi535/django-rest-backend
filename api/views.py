@@ -227,7 +227,7 @@ class Predict(APIView):
         self.process(self.model, split_path, output_path=pro_path)
 
         try:
-            self.make_video(uc_path, uc_path, len(os.listdir(pro_path)) // 3, filename)
+            self.make_video(pro_path, uc_path, len(os.listdir(pro_path)) // 3, filename)
         except AttributeError:
             return JsonResponse({'status': 403})
 
@@ -264,7 +264,7 @@ class Predict(APIView):
         filename = filename[:-4] + "_e.mp4"
         return JsonResponse(data={'status': 204,
                                   'evaluate': evaluate,
-                                  'url': f'http://127.0.0.1:8000/media/{userID}/{course}/{filename}'})
+                                  'url': f'media/{userID}/{course}/{filename}'})
 
     def transform(self, data, center):
         for idx, (name, point) in enumerate(data.items()):
@@ -438,7 +438,7 @@ class Predict(APIView):
         imgInfo = img.shape
         size = (imgInfo[1], imgInfo[0])  # 宽高
 
-        fps = 1  # 视频每秒1帧
+        fps = 10  # 视频每秒1帧
         video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
                                size)
         for i in range(0, count):
