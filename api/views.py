@@ -226,7 +226,10 @@ class Predict(APIView):
 
         self.process(self.model, split_path, output_path=pro_path)
 
-        self.make_video(pro_path, uc_path, len(os.listdir(pro_path)) // 3, filename)
+        try:
+            self.make_video(uc_path, uc_path, len(os.listdir(pro_path)) // 3, filename)
+        except AttributeError:
+            return JsonResponse({'status': 403})
 
         out = self.process_csv(base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
         criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'),
@@ -430,12 +433,10 @@ class Predict(APIView):
         return results
 
     def make_video(self, base_path, output_path, count, filename):
-        try:
-            img = cv.imread(os.path.join(base_path, '0_res.jpg'))
-            imgInfo = img.shape
-            size = (imgInfo[1], imgInfo[0])  # 宽高
-        except AttributeError:
-            return JsonResponse(status=403);
+
+        img = cv.imread(os.path.join(base_path, '0_res.jpg'))
+        imgInfo = img.shape
+        size = (imgInfo[1], imgInfo[0])  # 宽高
 
         fps = 1  # 视频每秒1帧
         video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
