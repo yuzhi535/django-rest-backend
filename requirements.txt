@@ -8,3 +8,4 @@ paddlehub
 numpy
 opencv-python
 paddlepaddle-gpu==2.2.2
+imutils

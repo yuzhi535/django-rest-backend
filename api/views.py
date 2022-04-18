@@ -14,6 +14,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
 from django.http import HttpResponse, JsonResponse
+# deal with videos
+from imutils.video import FileVideoStream
 from rest_framework import views
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
@@ -216,7 +218,7 @@ class Predict(APIView):
         uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
 
-        self.split_video(uv_path, output_path=split_path)
+        self.split_video(uv_path, output_path=split_path, fps_limit=10)
 
         self.process(split_path, output_path=pro_path)
 
@@ -373,22 +375,22 @@ class Predict(APIView):
             os.mkdir(output_path)
         self.delete_all_files(output_path)
 
-        cap = cv.VideoCapture(video)
+        fvs = FileVideoStream(video).start()
+
         elapsed = 1 / fps_limit
-        if cap.isOpened():
-            prev = time.time()
-            i = 0
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                elapsed_time = time.time() - prev
-                if elapsed_time > elapsed:
-                    prev = time.time()
-                    cv.imwrite(os.path.join(output_path, f'{i}.jpg'), frame)
-                    i += 1
-            return True
-        return False
+        prev = time.time()
+        i = 0
+        while fvs.more():
+            # grab the frame from the threaded video file stream
+            frame = fvs.read()
+
+            elapsed_time = time.time() - prev
+            if elapsed_time > elapsed:
+                prev = time.time()
+                cv.imwrite(os.path.join(output_path, f'{i}.jpg'), frame)
+                i += 1
+        fvs.stop()
+        return True
 
     def dis(self, pos1, pos2):
         if np.isnan(pos1).any() or np.isnan(pos2).any():
@@ -454,7 +456,7 @@ class Predict(APIView):
         imgInfo = img.shape
         size = (imgInfo[1], imgInfo[0])  # 宽高
 
-        fps = 10  # 视频每秒1帧
+        fps = 1  # 视频每秒1帧
         video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
                                size)
         for i in range(0, count):
@@ -463,4 +465,3 @@ class Predict(APIView):
             video.write(img)
 
         video.release()
-        cv.destroyAllWindows()
