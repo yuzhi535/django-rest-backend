@@ -1,32 +1,28 @@
 from __future__ import division
-from operator import mod
 
-from typing import Union
 import copy
+import os
+import time
+from typing import Union
 
-from django.contrib import messages
-from django.db import IntegrityError
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+import cv2 as cv
+import numpy as np
+import paddle
+import paddlehub as hub
+import pandas as pd
+from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
+from django.db import IntegrityError
+from django.http import HttpResponse, JsonResponse
 from rest_framework import views
+from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import api_view
-from rest_framework.parsers import FileUploadParser, MultiPartParser, FormParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authtoken.models import Token
 
-from backend.models import User, Course, CustomUser
-from django.contrib.auth import authenticate, login
-
-import paddlehub as hub
-import paddle
-import cv2 as cv
-import time
-import pandas as pd
-import os
-import numpy as np
+from backend.models import User, CustomUser
 
 division = 10000
 
@@ -126,7 +122,7 @@ def register(request):
                     "birthday": instance2.birthday,
                     "hobbies": instance2.hobbies,
                     "idcard_number": instance2.idcard_number,
-                    "avatar_status": '1' if instance2.avatar else '0',
+                    "avatar_status": 'taiji' if instance2.avatar else '0',
                     "status": '200'
                 })
         else:
@@ -203,7 +199,9 @@ class CustomAuthToken(ObtainAuthToken):
 
 # predict and process
 class Predict(APIView):
+    paddle.set_device(paddle.device.get_device())
     model = hub.Module(name='openpose_body_estimation')
+    model.eval()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -365,6 +363,7 @@ class Predict(APIView):
             subset_dat.to_csv(os.path.join(
                 output_path, f'{file[:-4]}_subset.csv'))
 
+    # TODO use faster video split library
     def split_video(self, video: str, output_path='./data', fps_limit=10) -> bool:
         """
         split a video to frames. return a list of a quantity of images
@@ -417,9 +416,7 @@ class Predict(APIView):
         return dp[l1][l2] / division
 
     @staticmethod
-    def predict(img: Union[str, np.ndarray], visualization: bool = True):
-        Predict.model.eval()
-        visualization = visualization
+    def predict(img: Union[str, np.ndarray]):
         if isinstance(img, str):
             orgImg = cv.imread(img)
         else:
@@ -457,7 +454,7 @@ class Predict(APIView):
         imgInfo = img.shape
         size = (imgInfo[1], imgInfo[0])  # 宽高
 
-        fps = 1  # 视频每秒1帧
+        fps = 10  # 视频每秒1帧
         video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
                                size)
         for i in range(0, count):
@@ -467,4 +464,3 @@ class Predict(APIView):
 
         video.release()
         cv.destroyAllWindows()
-
