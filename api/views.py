@@ -1,6 +1,7 @@
 from __future__ import division
 
 import copy
+import math
 import os
 import time
 from typing import Union
@@ -180,6 +181,8 @@ class FileUploadView(views.APIView):
         #     count = len([lists for lists in os.listdir(os.path.join(userID, course)) if
         #                  os.path.isfile(os.path.join(os.path.join(userID, course), lists))])
         #     outpath = str(count) + outpath
+
+        # save the video
         with open(outpath, 'wb') as f:
             for chunk in file_obj.chunks():
                 f.write(chunk)
@@ -199,7 +202,6 @@ class CustomAuthToken(ObtainAuthToken):
         })
 
 
-# predict and process
 class Predict(APIView):
     paddle.set_device(paddle.device.get_device())
     model = hub.Module(name='openpose_body_estimation')
@@ -207,6 +209,14 @@ class Predict(APIView):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    @staticmethod
+    def transform(data, center):
+        for idx, (name, point) in enumerate(data.items()):
+            print(f'center={center} and point={point}', end=' ')
+            if point.any():
+                point -= center
+            print(f'center={center} and point={point}')
 
     def post(self, request):
         course = request.POST.get('course')
@@ -218,20 +228,17 @@ class Predict(APIView):
         uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
 
-        self.split_video(uv_path, output_path=split_path, fps_limit=10)
+        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=10)
 
-        self.process(split_path, output_path=pro_path)
+        res = self.process(imgs, output_path=pro_path)
 
         try:
-            self.make_video(pro_path, uc_path, len(
-                os.listdir(pro_path)) // 3, filename)
+            self.make_video(res[2], uc_path, filename)
         except AttributeError:
             return JsonResponse({'status': 403})
 
-        out = self.process_csv(
-            base_path=pro_path, output_path=os.path.join(uc_path, 'pro_csv'))
-        criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'),
-                                     output_path=os.path.join('course', course, 'pro_csv'))
+        out = Predict.post_process(res[0], res[1])
+        criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'))
         cost_head = self.dynamic_time_warping(criterion[0], out[0])
         cost_rarm = self.dynamic_time_warping(criterion[1], out[1])
         cost_larm = self.dynamic_time_warping(criterion[2], out[2])
@@ -243,10 +250,10 @@ class Predict(APIView):
         print('larm', cost_larm)
         print('rleg', cost_rleg)
         print('lleg', cost_lleg)
-        score = 100 - max(cost_head, cost_larm,
-                          cost_larm, cost_rleg, cost_lleg)
+        # score = 100 - max(cost_head, cost_larm,
+        #                   cost_larm, cost_rleg, cost_lleg)
 
-        key = 10
+        key = 50
         evaluate = ""
         str = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
                "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
@@ -268,11 +275,6 @@ class Predict(APIView):
                                   'evaluate': evaluate,
                                   'url': f'{userID}/{course}/{filename}'})
 
-    def transform(self, data, center):
-        for idx, (name, point) in enumerate(data.items()):
-            if point.any():
-                point -= center
-
     def delete_all_files(self, dir: str):
         for file in os.listdir(dir):
             os.remove(os.path.join(dir, file))
@@ -282,14 +284,8 @@ class Predict(APIView):
         dat.index = ['x', 'y']
         dat.to_csv(os.path.join(base_dir, filename))
 
-    def process_csv(self, base_path='output', thresh=.3, output_path='csv'):
-        sz = len(os.listdir(base_path)) // 3  # 3个文件一套
-        if not os.path.exists(output_path):
-            os.mkdir(output_path)
-        else:
-            self.delete_all_files(output_path)  # 删除先前所有文件
-
-        series = []
+    @staticmethod
+    def post_process(candidates, subsets, thresh=0.3):
         heads = []
         rarms = []
         larms = []
@@ -302,12 +298,11 @@ class Predict(APIView):
                     'rhip', 'rknee', 'rankle',
                     'lhip', 'lknee', 'lankle')
 
-        for file in range(sz):
-            candidate_dat = pd.read_csv(os.path.join(
-                base_path, f'{file}_candidate.csv'))
-            subset_dat = pd.read_csv(os.path.join(
-                base_path, f'{file}_subset.csv'))
-            # print(subset_dat.shape)
+        assert len(candidates) == len(subsets), 'candidates length is not equal to that of subsets!'
+
+        for i in range(len(candidates)):
+            candidate_dat = candidates[i]
+            subset_dat = subsets[i]
             if candidate_dat.empty:
                 print('无人')
                 continue
@@ -328,10 +323,10 @@ class Predict(APIView):
                     continue
                 else:
                     pos[pos_name[idx - 1]] = np.array(
-                        [int(candidate_dat.loc[k][1]), int(candidate_dat.loc[k][2])])
-            self.transform(pos, pos['neck'].copy())
-            self.save_csv(pos, filename=f'{file}.csv', base_dir=output_path)
-            series.append(pos)
+                        [int(candidate_dat.loc[k][0]), int(candidate_dat.loc[k][1])])
+            if not np.isnan(np.min(pos['neck'])):
+                Predict.transform(pos, pos['neck'].copy())
+
             heads.append({'nose': pos.get('nose'), 'neck': pos.get('neck')})
             rarms.append({'rshoulder': pos.get('rshoulder'), 'relbow': pos.get(
                 'relbow'), 'rhand': pos.get('rhand')})
@@ -341,61 +336,77 @@ class Predict(APIView):
                 'rknee'), 'rankle': pos.get('rankle')})
             llegs.append({'lhip': pos.get('lhip'), 'lknee': pos.get(
                 'lknee'), 'lankle': pos.get('lankle')})
-        return heads, rarms, larms, rlegs, llegs  # 返回元组，方便后期索引
+        return heads, rarms, larms, rlegs, llegs
 
-    def process(self, base_path='./data', output_path='output'):
-        if not os.path.exists(output_path):
-            os.mkdir(output_path)
-        else:
-            self.delete_all_files(output_path)
-        for file in os.listdir(base_path):
-            img = cv.imread(os.path.join(base_path, file))
-            img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    # standard
+    def process_csv(self, base_path='output', thresh=.3):
+        sz = len(os.listdir(base_path)) // 3  # 3个文件一套
+
+        candidates, subsets = [], []
+        for file in range(sz):
+            candidate_dat = pd.read_csv(os.path.join(
+                base_path, f'{file}_candidate.csv'))
+            subset_dat = pd.read_csv(os.path.join(
+                base_path, f'{file}_subset.csv'))
+            candidates.append(candidate_dat)
+            subsets.append(subset_dat)
+        return Predict.post_process(candidates, subsets, thresh=thresh)
+
+    def process(self, imgs: list, output_path='output'):
+        candidates = []
+        subsets = []
+        out_imgs = []
+        for ind, img in enumerate(imgs):
             ret = self.predict(img)
             out_img = ret['data']
-            out_img = cv.cvtColor(out_img, cv.COLOR_RGB2BGR)
-            cv.imwrite(os.path.join(
-                output_path, f'{file[:-4]}_res.jpg'), out_img)
+
+            out_imgs.append(out_img)
+
             candidate = ret['candidate']
             subset = ret['subset']
             candidate_dat = pd.DataFrame(candidate)
             subset_dat = pd.DataFrame(subset)
-            candidate_dat.to_csv(os.path.join(
-                output_path, f'{file[:-4]}_candidate.csv'))
-            subset_dat.to_csv(os.path.join(
-                output_path, f'{file[:-4]}_subset.csv'))
+
+            candidates.append(candidate_dat)
+            subsets.append(subset_dat)
+
+        return candidates, subsets, out_imgs
 
     # TODO use faster video split library
-    def split_video(self, video: str, output_path='./data', fps_limit=10) -> bool:
+    def split_video(self, video: str, output_path='./data', fps_limit=10) -> list:
         """
         split a video to frames. return a list of a quantity of images
-        use opencv
+        use CamGear library
         """
-        if not os.path.exists(output_path):
-            os.mkdir(output_path)
-        self.delete_all_files(output_path)
 
-        fvs = FileVideoStream(video).start()
+        stream = FileVideoStream(video).start()
+
+        imgs = []
 
         elapsed = 1 / fps_limit
         prev = time.time()
         i = 0
-        while fvs.more():
+        print('start process video')
+        while 1:
             # grab the frame from the threaded video file stream
-            frame = fvs.read()
+            frame = stream.read()
+
+            if frame is None:
+                break
 
             elapsed_time = time.time() - prev
             if elapsed_time > elapsed:
                 prev = time.time()
-                cv.imwrite(os.path.join(output_path, f'{i}.jpg'), frame)
+                imgs.append(frame)
                 i += 1
-        fvs.stop()
-        return True
+        stream.stop()
+        print('end process video')
+        return imgs
 
     def dis(self, pos1, pos2):
         if np.isnan(pos1).any() or np.isnan(pos2).any():
             return 0
-        ans = (pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2
+        ans = int(math.sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2))
         return ans
 
     def body_dis(self, body1, body2):
@@ -450,18 +461,18 @@ class Predict(APIView):
 
         return results
 
-    def make_video(self, base_path, output_path, count, filename):
+    def make_video(self, imgs, output_path, filename):
+        assert len(imgs) > 0, 'the images count is zero!!!'
 
-        img = cv.imread(os.path.join(base_path, '0_res.jpg'))
+        img = imgs[0]
         imgInfo = img.shape
         size = (imgInfo[1], imgInfo[0])  # 宽高
 
         fps = 1  # 视频每秒1帧
         video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
                                size)
-        for i in range(0, count):
-            fileName = os.path.join(base_path, str(i) + '_res.jpg')
-            img = cv.imread(fileName)  # 写入参数，参数是图片编码之前的数据
+        for i in range(len(imgs)):
+            img = imgs[i]
             video.write(img)
 
         video.release()
