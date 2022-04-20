@@ -8,8 +8,6 @@ from typing import Union
 
 import cv2 as cv
 import numpy as np
-import paddle
-import paddlehub as hub
 import pandas as pd
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
@@ -26,6 +24,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from backend.models import User, CustomUser
+
+import mediapipe as mp
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+mp_pose = mp.solutions.pose
 
 division = 10000
 
@@ -203,9 +206,34 @@ class CustomAuthToken(ObtainAuthToken):
 
 
 class Predict(APIView):
-    paddle.set_device(paddle.device.get_device())
-    model = hub.Module(name='openpose_body_estimation')
-    model.eval()
+
+    position = range(11, 33)
+
+    position_map = {
+        0: 'nose',
+        11: 'Left shoulder',
+        12: 'Right shoulder',
+        13: 'Left elbow',
+        14: 'Right elbow',
+        15: 'Left wrist',
+        16: 'Right wrist',
+        17: 'Left pinky ',  # 1 knuckle
+        18: 'Right pinky',  # 1 knuckle
+        19: 'Left index',  # 1 knuckle
+        20: 'Right index',  # 1 knuckle
+        21: 'Left thumb',  # 2 knuckle
+        22: 'Right thumb',  # 2 knuckle
+        23: 'Left hip',
+        24: 'Right hip',
+        25: 'Left knee',
+        26: 'Right knee',
+        27: 'Left ankle',
+        28: 'Right ankle',
+        29: 'Left heel',
+        30: 'Right heel',
+        31: 'Left foot index',
+        32: 'Right foot index'
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -232,43 +260,45 @@ class Predict(APIView):
 
         res = self.process(imgs, output_path=pro_path)
 
-        try:
-            self.make_video(res[2], uc_path, filename)
-        except AttributeError:
-            return JsonResponse({'status': 403})
+        # try:
+        #     self.make_video(res[2], uc_path, filename)
+        # except AttributeError:
+        #     return JsonResponse({'status': 403})
 
-        out = Predict.post_process(res[0], res[1])
-        criterion = self.process_csv(base_path=os.path.join('course', course, 'pro'))
-        cost_head = self.dynamic_time_warping(criterion[0], out[0])
-        cost_rarm = self.dynamic_time_warping(criterion[1], out[1])
-        cost_larm = self.dynamic_time_warping(criterion[2], out[2])
-        cost_rleg = self.dynamic_time_warping(criterion[3], out[3])
-        cost_lleg = self.dynamic_time_warping(criterion[4], out[4])
+        # out = Predict.criterion_post_process(res[0], res[1])
+        # criterion = self.process_csv(
+        #     base_path=os.path.join('course', course, 'pro'))
+        # cost_head = self.dynamic_time_warping(criterion[0], out[0])
+        # cost_rarm = self.dynamic_time_warping(criterion[1], out[1])
+        # cost_larm = self.dynamic_time_warping(criterion[2], out[2])
+        # cost_rleg = self.dynamic_time_warping(criterion[3], out[3])
+        # cost_lleg = self.dynamic_time_warping(criterion[4], out[4])
 
-        print('head', cost_head)
-        print('rarm', cost_rarm)
-        print('larm', cost_larm)
-        print('rleg', cost_rleg)
-        print('lleg', cost_lleg)
+        # print('head', cost_head)
+        # print('rarm', cost_rarm)
+        # print('larm', cost_larm)
+        # print('rleg', cost_rleg)
+        # print('lleg', cost_lleg)
         # score = 100 - max(cost_head, cost_larm,
         #                   cost_larm, cost_rleg, cost_lleg)
 
         key = 50
         evaluate = ""
-        str = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
-               "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
-        if cost_head >= key:
-            evaluate = evaluate + str[0]
-        if cost_rarm >= key:
-            evaluate = evaluate + str[1]
-        if cost_larm >= key:
-            evaluate = evaluate + str[2]
-        if cost_rleg >= key:
-            evaluate = evaluate + str[3]
-        if cost_lleg >= key:
-            evaluate = evaluate + str[4]
+        # error = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
+        #        "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
+        # if cost_head >= key:
+        #     evaluate = evaluate + error[0]
+        # if cost_rarm >= key:
+        #     evaluate = evaluate + error[1]
+        # if cost_larm >= key:
+        #     evaluate = evaluate + error[2]
+        # if cost_rleg >= key:
+        #     evaluate = evaluate + error[3]
+        # if cost_lleg >= key:
+        #     evaluate = evaluate + error[4]
 
-        if evaluate == "": evaluate = "您的动作非常完美"
+        if evaluate == "":
+            evaluate = "您的动作非常完美"
 
         filename = filename[:-4] + "_e.mp4"
         return JsonResponse(data={'status': 204,
@@ -298,22 +328,17 @@ class Predict(APIView):
                     'rhip', 'rknee', 'rankle',
                     'lhip', 'lknee', 'lankle')
 
-        assert len(candidates) == len(subsets), 'candidates length is not equal to that of subsets!'
+        assert len(candidates) == len(
+            subsets), 'candidates length is not equal to that of subsets!'
 
         for i in range(len(candidates)):
             candidate_dat = candidates[i]
             subset_dat = subsets[i]
-            if candidate_dat.empty:
-                print('无人')
-                continue
-            if subset_dat.shape[0] > 1:
-                print('多人！')
-                continue
 
             pos = {}
 
             # 只需要看到14个就够了，不需要脸部数据
-            for idx in range(1, 15):
+            for idx in Predict.position:
                 k = subset_dat.loc[0][idx]
                 if k == -1:
                     pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
@@ -338,7 +363,7 @@ class Predict(APIView):
                 'lknee'), 'lankle': pos.get('lankle')})
         return heads, rarms, larms, rlegs, llegs
 
-    # standard
+
     def process_csv(self, base_path='output', thresh=.3):
         sz = len(os.listdir(base_path)) // 3  # 3个文件一套
 
@@ -353,24 +378,14 @@ class Predict(APIView):
         return Predict.post_process(candidates, subsets, thresh=thresh)
 
     def process(self, imgs: list, output_path='output'):
-        candidates = []
-        subsets = []
         out_imgs = []
         for ind, img in enumerate(imgs):
-            ret = self.predict(img)
+            ret = Predict.predict(img)
             out_img = ret['data']
 
             out_imgs.append(out_img)
 
-            candidate = ret['candidate']
-            subset = ret['subset']
-            candidate_dat = pd.DataFrame(candidate)
-            subset_dat = pd.DataFrame(subset)
-
-            candidates.append(candidate_dat)
-            subsets.append(subset_dat)
-
-        return candidates, subsets, out_imgs
+        return ret['cordinates'], out_imgs
 
     # TODO use faster video split library
     def split_video(self, video: str, output_path='./data', fps_limit=10) -> list:
@@ -406,7 +421,8 @@ class Predict(APIView):
     def dis(self, pos1, pos2):
         if np.isnan(pos1).any() or np.isnan(pos2).any():
             return 0
-        ans = int(math.sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2))
+        ans = int(math.sqrt((pos1[0] - pos2[0]) **
+                  2 + (pos1[1] - pos2[1]) ** 2))
         return ans
 
     def body_dis(self, body1, body2):
@@ -429,35 +445,57 @@ class Predict(APIView):
         return dp[l1][l2] / division
 
     @staticmethod
-    def predict(img: Union[str, np.ndarray]):
-        if isinstance(img, str):
-            orgImg = cv.imread(img)
-        else:
-            orgImg = img
-        data, imageToTest_padded, pad = Predict.model.transform(orgImg)
-        Mconv7_stage6_L1, Mconv7_stage6_L2 = Predict.model.forward(
-            paddle.to_tensor(data))
-        Mconv7_stage6_L1 = Mconv7_stage6_L1.numpy()
-        Mconv7_stage6_L2 = Mconv7_stage6_L2.numpy()
+    def predict(imgs: Union[str, np.ndarray]):
 
-        heatmap_avg = Predict.model.remove_pad(
-            Mconv7_stage6_L2, imageToTest_padded, orgImg, pad)
-        paf_avg = Predict.model.remove_pad(
-            Mconv7_stage6_L1, imageToTest_padded, orgImg, pad)
+        cordinates = []
+        out_imgs = []
+        BG_COLOR = (192, 192, 192)
 
-        all_peaks = Predict.model.get_peak(heatmap_avg)
-        connection_all, special_k = Predict.model.get_connection(
-            all_peaks, paf_avg, orgImg)
-        candidate, subset = Predict.model.get_candidate(
-            all_peaks, connection_all, special_k)
+        with mp_pose.Pose(
+                static_image_mode=True,
+                model_complexity=2,
+                enable_segmentation=True,
+                min_detection_confidence=0.5) as pose:
+            for idx, image in enumerate(imgs):
+                cordinate = {}
+                image_height, image_width, _ = image.shape
+                # Convert the BGR image to RGB before processing.
+                results = pose.process(cv.cvtColor(image, cv.COLOR_BGR2RGB))
 
-        canvas = copy.deepcopy(orgImg)
-        canvas = Predict.model.draw_pose(canvas, candidate, subset)
+                if not results.pose_landmarks:
+                    continue
+                for id in Predict.position:
+                    print(
+                        f'{Predict.position_map[id]} coordinates: ('
+                        f'{results.pose_landmarks.landmark[id].x * image_width},'
+                        f'{results.pose_landmarks.landmark[id].y * image_height})'
+                        f' {results.pose_landmarks.landmark[id].visibility}'
+                    )
+                    cordinate[Predict.position_map[id]] = (results.pose_landmarks.landmark[id].x * image_width,
+                                                           results.pose_landmarks.landmark[id].y * image_height, results.pose_landmarks.landmark[id].visibility)
 
+                annotated_image = image.copy()
+                # Draw segmentation on the image.
+                # To improve segmentation around boundaries, consider applying a joint
+                # bilateral filter to "results.segmentation_mask" with "image".
+                condition = np.stack(
+                    (results.segmentation_mask,) * 3, axis=-1) > 0.1
+                bg_image = np.zeros(image.shape, dtype=np.uint8)
+                bg_image[:] = BG_COLOR
+                annotated_image = np.where(
+                    condition, annotated_image, bg_image)
+                # Draw pose landmarks on the image.
+                mp_drawing.draw_landmarks(
+                    annotated_image,
+                    results.pose_landmarks,
+                    mp_pose.POSE_CONNECTIONS,
+                    landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
+
+                cordinates.append(cordinate)
+                out_imgs.append(annotated_image)
         results = {
-            'candidate': candidate,
-            'subset': subset,
-            'data': canvas}
+            'cordinates': cordinate,
+            'data': annotated_image}
 
         return results
 
