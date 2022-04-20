@@ -8,7 +8,6 @@ from typing import Union
 
 import cv2 as cv
 import numpy as np
-import pandas as pd
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
@@ -26,6 +25,7 @@ from rest_framework.views import APIView
 from backend.models import User, CustomUser
 
 import mediapipe as mp
+
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
@@ -168,10 +168,7 @@ class FileUploadView(views.APIView):
             assert file_obj is not None
         except AssertionError:
             return JsonResponse({'status': 401})
-        """
-        这里根据用户id，每个用户id创建一个目录，并且在用户目录里面根据课程创建一个目录，视频存到课程目录里面。
-        # 如果考虑次数，则可能需要对视频重命名。
-        """
+
         path = os.path.join(os.getcwd(), 'media')
         if not os.path.exists(path):
             os.mkdir(path)
@@ -205,12 +202,17 @@ class CustomAuthToken(ObtainAuthToken):
         })
 
 
-class Predict(APIView):
+# TODO 使用mediapipe 重写
+'''
+1. 首先要兼容openpose生成的csv文件
+2. 
+'''
 
+
+class Predict(APIView):
     position = range(11, 33)
 
     position_map = {
-        0: 'nose',
         11: 'Left shoulder',
         12: 'Right shoulder',
         13: 'Left elbow',
@@ -259,6 +261,11 @@ class Predict(APIView):
         imgs = self.split_video(uv_path, output_path=split_path, fps_limit=10)
 
         res = self.process(imgs, output_path=pro_path)
+
+        # save videos
+        self.make_video(res['data'], output_path=uv_path, filename=filename[:-3] + '_e.mp4')
+
+        Predict.post_process(res=res)
 
         # try:
         #     self.make_video(res[2], uc_path, filename)
@@ -309,89 +316,70 @@ class Predict(APIView):
         for file in os.listdir(dir):
             os.remove(os.path.join(dir, file))
 
-    def save_csv(self, data, filename, base_dir='./work'):
-        dat = pd.DataFrame(data)
-        dat.index = ['x', 'y']
-        dat.to_csv(os.path.join(base_dir, filename))
-
     @staticmethod
-    def post_process(candidates, subsets, thresh=0.3):
-        heads = []
+    def post_process(res, thresh=0.3):
         rarms = []
         larms = []
         rlegs = []
         llegs = []
 
-        pos_name = ('nose', 'neck',
-                    'rshoulder', 'relbow', 'rhand',
-                    'lshoulder', 'lelbow', 'lhand',
-                    'rhip', 'rknee', 'rankle',
-                    'lhip', 'lknee', 'lankle')
-
-        assert len(candidates) == len(
-            subsets), 'candidates length is not equal to that of subsets!'
-
-        for i in range(len(candidates)):
-            candidate_dat = candidates[i]
-            subset_dat = subsets[i]
-
+        for coordinates in res['coordinates']:
             pos = {}
 
             # 只需要看到14个就够了，不需要脸部数据
             for idx in Predict.position:
-                k = subset_dat.loc[0][idx]
-                if k == -1:
-                    pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
+                if coordinates.get(Predict.position_map[idx]) is None:
+                    pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
                     continue
-                elif candidate_dat.loc[k][3] < thresh:
-                    pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
+                elif coordinates[idx][2] < thresh:
+                    pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
                     continue
                 else:
-                    pos[pos_name[idx - 1]] = np.array(
-                        [int(candidate_dat.loc[k][0]), int(candidate_dat.loc[k][1])])
-            if not np.isnan(np.min(pos['neck'])):
-                Predict.transform(pos, pos['neck'].copy())
+                    pos[Predict.position_map[idx]] = np.array(
+                        [int(coordinates[idx][0]), int(coordinates[idx][1])])
 
-            heads.append({'nose': pos.get('nose'), 'neck': pos.get('neck')})
-            rarms.append({'rshoulder': pos.get('rshoulder'), 'relbow': pos.get(
-                'relbow'), 'rhand': pos.get('rhand')})
-            larms.append({'lshoulder': pos.get('lshoulder'), 'lelbow': pos.get(
-                'lelbow'), 'lhand': pos.get('lhand')})
-            rlegs.append({'rhip': pos.get('rhip'), 'rknee': pos.get(
-                'rknee'), 'rankle': pos.get('rankle')})
-            llegs.append({'lhip': pos.get('lhip'), 'lknee': pos.get(
-                'lknee'), 'lankle': pos.get('lankle')})
-        return heads, rarms, larms, rlegs, llegs
+            # 以左肩膀和右肩膀的中点为中心
+            if not np.any(np.isnan(np.min(pos[Predict.position_map[11]])), np.min(pos[Predict.position_map[12]])):
+                center = (pos[Predict.position_map[11]] + pos[Predict.position_map[12]]) / 2
+                Predict.transform(pos, center)
+            else:
+                continue
 
+            rarms.append({'rshoulder': pos.get(Predict.position_map[12]), 'relbow': pos.get(
+                Predict.position_map[14]), 'rhand': pos.get(Predict.position_map[22])})
+            larms.append({'lshoulder': pos.get(Predict.position_map[11]), 'lelbow': pos.get(
+                Predict.position_map[13]), 'lhand': pos.get(Predict.position_map[21])})
+            rlegs.append({'rhip': pos.get(Predict.position_map[24]), 'rknee': pos.get(
+                Predict.position_map[26]), 'rankle': pos.get(Predict.position_map[28])})
+            llegs.append({'lhip': pos.get(Predict.position_map[13]), 'lknee': pos.get(
+                Predict.position_map[15]), 'lankle': pos.get(Predict.position_map[27])})
+        return rarms, larms, rlegs, llegs
 
     def process_csv(self, base_path='output', thresh=.3):
         sz = len(os.listdir(base_path)) // 3  # 3个文件一套
 
         candidates, subsets = [], []
-        for file in range(sz):
-            candidate_dat = pd.read_csv(os.path.join(
-                base_path, f'{file}_candidate.csv'))
-            subset_dat = pd.read_csv(os.path.join(
-                base_path, f'{file}_subset.csv'))
-            candidates.append(candidate_dat)
-            subsets.append(subset_dat)
+
         return Predict.post_process(candidates, subsets, thresh=thresh)
 
     def process(self, imgs: list, output_path='output'):
         out_imgs = []
+        coordinates = []
         for ind, img in enumerate(imgs):
             ret = Predict.predict(img)
+            if ret is None: continue
             out_img = ret['data']
 
             out_imgs.append(out_img)
+            coordinates.append(ret['coordinates'])
 
-        return ret['cordinates'], out_imgs
+        return {'coordinates': coordinates, 'data': out_imgs}
 
     # TODO use faster video split library
     def split_video(self, video: str, output_path='./data', fps_limit=10) -> list:
         """
         split a video to frames. return a list of a quantity of images
-        use CamGear library
+        use imutils video library, a multi-thread opencv method
         """
 
         stream = FileVideoStream(video).start()
@@ -402,12 +390,9 @@ class Predict(APIView):
         prev = time.time()
         i = 0
         print('start process video')
-        while 1:
+        while stream.more():
             # grab the frame from the threaded video file stream
             frame = stream.read()
-
-            if frame is None:
-                break
 
             elapsed_time = time.time() - prev
             if elapsed_time > elapsed:
@@ -422,7 +407,7 @@ class Predict(APIView):
         if np.isnan(pos1).any() or np.isnan(pos2).any():
             return 0
         ans = int(math.sqrt((pos1[0] - pos2[0]) **
-                  2 + (pos1[1] - pos2[1]) ** 2))
+                            2 + (pos1[1] - pos2[1]) ** 2))
         return ans
 
     def body_dis(self, body1, body2):
@@ -445,10 +430,8 @@ class Predict(APIView):
         return dp[l1][l2] / division
 
     @staticmethod
-    def predict(imgs: Union[str, np.ndarray]):
+    def predict(image: Union[str, np.ndarray]):
 
-        cordinates = []
-        out_imgs = []
         BG_COLOR = (192, 192, 192)
 
         with mp_pose.Pose(
@@ -456,47 +439,45 @@ class Predict(APIView):
                 model_complexity=2,
                 enable_segmentation=True,
                 min_detection_confidence=0.5) as pose:
-            for idx, image in enumerate(imgs):
-                cordinate = {}
-                image_height, image_width, _ = image.shape
-                # Convert the BGR image to RGB before processing.
-                results = pose.process(cv.cvtColor(image, cv.COLOR_BGR2RGB))
+            coordinates = {}
+            image_height, image_width, _ = image.shape
+            # Convert the BGR image to RGB before processing.
+            results = pose.process(cv.cvtColor(image, cv.COLOR_BGR2RGB))
 
-                if not results.pose_landmarks:
-                    continue
-                for id in Predict.position:
-                    print(
-                        f'{Predict.position_map[id]} coordinates: ('
-                        f'{results.pose_landmarks.landmark[id].x * image_width},'
-                        f'{results.pose_landmarks.landmark[id].y * image_height})'
-                        f' {results.pose_landmarks.landmark[id].visibility}'
-                    )
-                    cordinate[Predict.position_map[id]] = (results.pose_landmarks.landmark[id].x * image_width,
-                                                           results.pose_landmarks.landmark[id].y * image_height, results.pose_landmarks.landmark[id].visibility)
+            if not results.pose_landmarks:
+                return None
+            for id in Predict.position:
+                print(
+                    f'{Predict.position_map[id]} coordinates: ('
+                    f'{results.pose_landmarks.landmark[id].x * image_width},'
+                    f'{results.pose_landmarks.landmark[id].y * image_height})'
+                    f' {results.pose_landmarks.landmark[id].visibility}'
+                )
+                coordinates[Predict.position_map[id]] = (results.pose_landmarks.landmark[id].x * image_width,
+                                                         results.pose_landmarks.landmark[id].y * image_height,
+                                                         results.pose_landmarks.landmark[id].visibility)
 
-                annotated_image = image.copy()
-                # Draw segmentation on the image.
-                # To improve segmentation around boundaries, consider applying a joint
-                # bilateral filter to "results.segmentation_mask" with "image".
-                condition = np.stack(
-                    (results.segmentation_mask,) * 3, axis=-1) > 0.1
-                bg_image = np.zeros(image.shape, dtype=np.uint8)
-                bg_image[:] = BG_COLOR
-                annotated_image = np.where(
-                    condition, annotated_image, bg_image)
-                # Draw pose landmarks on the image.
-                mp_drawing.draw_landmarks(
-                    annotated_image,
-                    results.pose_landmarks,
-                    mp_pose.POSE_CONNECTIONS,
-                    landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
+            annotated_image = image.copy()
+            # Draw segmentation on the image.
+            # To improve segmentation around boundaries, consider applying a joint
+            # bilateral filter to "results.segmentation_mask" with "image".
+            condition = np.stack(
+                (results.segmentation_mask,) * 3, axis=-1) > 0.1
+            bg_image = np.zeros(image.shape, dtype=np.uint8)
+            bg_image[:] = BG_COLOR
+            annotated_image = np.where(
+                condition, annotated_image, bg_image)
+            # Draw pose landmarks on the image.
+            mp_drawing.draw_landmarks(
+                annotated_image,
+                results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
 
-                cordinates.append(cordinate)
-                out_imgs.append(annotated_image)
         results = {
-            'cordinates': cordinate,
-            'data': annotated_image}
-
+            'coordinates': coordinates,
+            'data': annotated_image
+        }
         return results
 
     def make_video(self, imgs, output_path, filename):
