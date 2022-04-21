@@ -14,6 +14,7 @@ from django.db import IntegrityError
 from django.http import HttpResponse, JsonResponse
 # deal with videos
 from imutils.video import FileVideoStream
+import pandas as pd
 from rest_framework import views
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
@@ -262,47 +263,41 @@ class Predict(APIView):
 
         res = self.process(imgs, output_path=pro_path)
 
-        # save videos
-        self.make_video(res['data'], output_path=uv_path, filename=filename[:-3] + '_e.mp4')
 
-        Predict.post_process(res=res)
 
         # try:
         #     self.make_video(res[2], uc_path, filename)
         # except AttributeError:
         #     return JsonResponse({'status': 403})
 
-        # out = Predict.criterion_post_process(res[0], res[1])
-        # criterion = self.process_csv(
-        #     base_path=os.path.join('course', course, 'pro'))
-        # cost_head = self.dynamic_time_warping(criterion[0], out[0])
-        # cost_rarm = self.dynamic_time_warping(criterion[1], out[1])
-        # cost_larm = self.dynamic_time_warping(criterion[2], out[2])
-        # cost_rleg = self.dynamic_time_warping(criterion[3], out[3])
-        # cost_lleg = self.dynamic_time_warping(criterion[4], out[4])
+        out = Predict.post_process(res=res)
+        criterion = self.process_csv(
+            base_path=os.path.join('course', course, 'pro'))
+        cost_rarm = self.dynamic_time_warping(criterion[0], out[0])
+        cost_larm = self.dynamic_time_warping(criterion[1], out[1])
+        cost_rleg = self.dynamic_time_warping(criterion[2], out[2])
+        cost_lleg = self.dynamic_time_warping(criterion[3], out[3])
 
         # print('head', cost_head)
-        # print('rarm', cost_rarm)
-        # print('larm', cost_larm)
-        # print('rleg', cost_rleg)
-        # print('lleg', cost_lleg)
+        print('rarm', cost_rarm)
+        print('larm', cost_larm)
+        print('rleg', cost_rleg)
+        print('lleg', cost_lleg)
         # score = 100 - max(cost_head, cost_larm,
         #                   cost_larm, cost_rleg, cost_lleg)
 
-        key = 50
+        key = 10
         evaluate = ""
-        # error = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
-        #        "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
-        # if cost_head >= key:
-        #     evaluate = evaluate + error[0]
-        # if cost_rarm >= key:
-        #     evaluate = evaluate + error[1]
-        # if cost_larm >= key:
-        #     evaluate = evaluate + error[2]
-        # if cost_rleg >= key:
-        #     evaluate = evaluate + error[3]
-        # if cost_lleg >= key:
-        #     evaluate = evaluate + error[4]
+        error = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
+               "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
+        if cost_rarm >= key:
+            evaluate = evaluate + error[1]
+        if cost_larm >= key:
+            evaluate = evaluate + error[2]
+        if cost_rleg >= key:
+            evaluate = evaluate + error[3]
+        if cost_lleg >= key:
+            evaluate = evaluate + error[4]
 
         if evaluate == "":
             evaluate = "您的动作非常完美"
@@ -317,50 +312,103 @@ class Predict(APIView):
             os.remove(os.path.join(dir, file))
 
     @staticmethod
-    def post_process(res, thresh=0.3):
+    def post_process(res, openpose=False, thresh=0.3):
         rarms = []
         larms = []
         rlegs = []
         llegs = []
 
-        for coordinates in res['coordinates']:
-            pos = {}
+        if not openpose:
+            for coordinates in res['coordinates']:
+                pos = {}
 
-            # 只需要看到14个就够了，不需要脸部数据
-            for idx in Predict.position:
-                if coordinates.get(Predict.position_map[idx]) is None:
-                    pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
-                    continue
-                elif coordinates[idx][2] < thresh:
-                    pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
-                    continue
+                # 只需要看到14个就够了，不需要脸部数据
+                for idx in Predict.position:
+                    if coordinates.get(Predict.position_map[idx]) is None:
+                        pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
+                        continue
+                    elif coordinates[Predict.position_map[idx]][2] < thresh:
+                        pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
+                        continue
+                    else:
+                        pos[Predict.position_map[idx]] = np.array(
+                            [int(coordinates[Predict.position_map[idx]][0]), int(coordinates[Predict.position_map[idx]][1])])
+
+                # 以左肩膀和右肩膀的中点为中心
+                if not np.any(np.array([np.isnan(np.min(pos[Predict.position_map[11]])), np.isnan(np.min(pos[Predict.position_map[12]]))])):
+                    center = (pos[Predict.position_map[11]] + pos[Predict.position_map[12]]) // 2
+                    Predict.transform(pos, center)
                 else:
-                    pos[Predict.position_map[idx]] = np.array(
-                        [int(coordinates[idx][0]), int(coordinates[idx][1])])
+                    continue
 
-            # 以左肩膀和右肩膀的中点为中心
-            if not np.any(np.isnan(np.min(pos[Predict.position_map[11]])), np.min(pos[Predict.position_map[12]])):
-                center = (pos[Predict.position_map[11]] + pos[Predict.position_map[12]]) / 2
-                Predict.transform(pos, center)
-            else:
-                continue
+                rarms.append({'Right shoulder': pos.get(Predict.position_map[12]), 'Right elbow': pos.get(
+                    Predict.position_map[14]), 'Right thumb': pos.get(Predict.position_map[22])})
+                larms.append({'Left shoulder': pos.get(Predict.position_map[11]), 'Left elbow': pos.get(
+                    Predict.position_map[13]), 'Left thumb': pos.get(Predict.position_map[21])})
+                rlegs.append({'Right hip': pos.get(Predict.position_map[24]), 'Right knee': pos.get(
+                    Predict.position_map[26]), 'Right ankle': pos.get(Predict.position_map[28])})
+                llegs.append({'Left hip': pos.get(Predict.position_map[13]), 'Left knee': pos.get(
+                    Predict.position_map[15]), 'Left ankle': pos.get(Predict.position_map[27])})
+        else:
+            print(len(res))
+            candidates, subsets = res[0], res[1]
+            pos_name = ('nose', 'neck',
+                    'rshoulder', 'relbow', 'rhand',
+                    'lshoulder', 'lelbow', 'lhand',
+                    'rhip', 'rknee', 'rankle',
+                    'lhip', 'lknee', 'lankle')
+            
+            for i in range(len(candidates)):
+                candidate_dat = candidates[i]
+                subset_dat = subsets[i]
+                if candidate_dat.empty:
+                    print('无人')
+                    continue
+                if subset_dat.shape[0] > 1:
+                    print('多人！')
+                    continue
 
-            rarms.append({'rshoulder': pos.get(Predict.position_map[12]), 'relbow': pos.get(
-                Predict.position_map[14]), 'rhand': pos.get(Predict.position_map[22])})
-            larms.append({'lshoulder': pos.get(Predict.position_map[11]), 'lelbow': pos.get(
-                Predict.position_map[13]), 'lhand': pos.get(Predict.position_map[21])})
-            rlegs.append({'rhip': pos.get(Predict.position_map[24]), 'rknee': pos.get(
-                Predict.position_map[26]), 'rankle': pos.get(Predict.position_map[28])})
-            llegs.append({'lhip': pos.get(Predict.position_map[13]), 'lknee': pos.get(
-                Predict.position_map[15]), 'lankle': pos.get(Predict.position_map[27])})
+                pos = {}
+
+                # 只需要看到14个就够了，不需要脸部数据
+                for idx in range(1, 15):
+                    k = subset_dat.loc[0][idx]
+                    if k == -1:
+                        pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
+                        continue
+                    elif candidate_dat.loc[k][3] < thresh:
+                        pos[pos_name[idx - 1]] = np.array([np.NAN, np.NAN])
+                        continue
+                    else:
+                        pos[pos_name[idx - 1]] = np.array(
+                            [int(candidate_dat.loc[k][0]), int(candidate_dat.loc[k][1])])
+                if not np.isnan(np.min(pos['neck'])):
+                    Predict.transform(pos, pos['neck'].copy())
+
+                rarms.append({'Right shoulder': pos.get('rshoulder'), 'Right elbow': pos.get(
+                    'relbow'), 'Right thumb': pos.get('rhand')})
+                larms.append({'Left shoulder': pos.get('lshoulder'), 'Left elbow': pos.get(
+                    'lelbow'), 'Left thum': pos.get('lhand')})
+                rlegs.append({'Right hip': pos.get('rhip'), 'Right knee': pos.get(
+                    'rknee'), 'Right ankle': pos.get('rankle')})
+                llegs.append({'Left hip': pos.get('lhip'), 'Left knee': pos.get(
+                    'lknee'), 'Left ankle': pos.get('lankle')})
         return rarms, larms, rlegs, llegs
 
     def process_csv(self, base_path='output', thresh=.3):
         sz = len(os.listdir(base_path)) // 3  # 3个文件一套
 
         candidates, subsets = [], []
+        
+        for file in range(sz):
+            candidate_dat = pd.read_csv(os.path.join(
+                base_path, f'{file}_candidate.csv'))
+            subset_dat = pd.read_csv(os.path.join(
+                base_path, f'{file}_subset.csv'))
+            candidates.append(candidate_dat)
+            subsets.append(subset_dat)
 
-        return Predict.post_process(candidates, subsets, thresh=thresh)
+        return Predict.post_process((candidates, subsets), True, thresh=thresh)
 
     def process(self, imgs: list, output_path='output'):
         out_imgs = []
@@ -401,6 +449,7 @@ class Predict(APIView):
                 i += 1
         stream.stop()
         print('end process video')
+        print(f'num of frames i {len(imgs)}')
         return imgs
 
     def dis(self, pos1, pos2):
@@ -447,12 +496,6 @@ class Predict(APIView):
             if not results.pose_landmarks:
                 return None
             for id in Predict.position:
-                print(
-                    f'{Predict.position_map[id]} coordinates: ('
-                    f'{results.pose_landmarks.landmark[id].x * image_width},'
-                    f'{results.pose_landmarks.landmark[id].y * image_height})'
-                    f' {results.pose_landmarks.landmark[id].visibility}'
-                )
                 coordinates[Predict.position_map[id]] = (results.pose_landmarks.landmark[id].x * image_width,
                                                          results.pose_landmarks.landmark[id].y * image_height,
                                                          results.pose_landmarks.landmark[id].visibility)
@@ -488,7 +531,7 @@ class Predict(APIView):
         size = (imgInfo[1], imgInfo[0])  # 宽高
 
         fps = 1  # 视频每秒1帧
-        video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'H264'), fps,
+        video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'X264'), fps,
                                size)
         for i in range(len(imgs)):
             img = imgs[i]
