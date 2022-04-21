@@ -530,7 +530,7 @@ class Predict(APIView):
 
         fps = 5  # 视频每秒1帧
         print(os.path.join(output_path + f'{filename[:-4]}_e.mp4'))
-        video = cv.VideoWriter(os.path.join(output_path,f'{filename[:-4]}_e.mp4'), cv.VideoWriter_fourcc(*'MJPG'), fps,
+        video = cv.VideoWriter(os.path.join(output_path,f'{filename[:-4]}_e.mp4'), cv.VideoWriter_fourcc(*'H264'), fps,
                                size)
         for i in range(len(imgs)):
             img = imgs[i]
