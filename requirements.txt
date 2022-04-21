@@ -3,9 +3,9 @@ djangorestframework
 markdown       # Markdown support for the browsable API.
 django-filter  # Filtering support
 bcrypt
-psycopg2
-paddlehub
+psycopg2-binary
 numpy
 opencv-python
-paddlepaddle-gpu==2.2.2
 imutils
+mediapipe
+pandas
