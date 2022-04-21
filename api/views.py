@@ -244,10 +244,8 @@ class Predict(APIView):
     @staticmethod
     def transform(data, center):
         for idx, (name, point) in enumerate(data.items()):
-            print(f'center={center} and point={point}', end=' ')
             if point.any():
                 point -= center
-            print(f'center={center} and point={point}')
 
     def post(self, request):
         course = request.POST.get('course')
@@ -259,16 +257,16 @@ class Predict(APIView):
         uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
 
-        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=10)
+        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=50)
 
         res = self.process(imgs, output_path=pro_path)
 
 
 
-        # try:
-        #     self.make_video(res[2], uc_path, filename)
-        # except AttributeError:
-        #     return JsonResponse({'status': 403})
+        try:
+            self.make_video(res['data'], uc_path, filename)
+        except AttributeError:
+            return JsonResponse({'status': 403})
 
         out = Predict.post_process(res=res)
         criterion = self.process_csv(
@@ -388,7 +386,7 @@ class Predict(APIView):
                 rarms.append({'Right shoulder': pos.get('rshoulder'), 'Right elbow': pos.get(
                     'relbow'), 'Right thumb': pos.get('rhand')})
                 larms.append({'Left shoulder': pos.get('lshoulder'), 'Left elbow': pos.get(
-                    'lelbow'), 'Left thum': pos.get('lhand')})
+                    'lelbow'), 'Left thumb': pos.get('lhand')})
                 rlegs.append({'Right hip': pos.get('rhip'), 'Right knee': pos.get(
                     'rknee'), 'Right ankle': pos.get('rankle')})
                 llegs.append({'Left hip': pos.get('lhip'), 'Left knee': pos.get(
@@ -530,8 +528,9 @@ class Predict(APIView):
         imgInfo = img.shape
         size = (imgInfo[1], imgInfo[0])  # 宽高
 
-        fps = 1  # 视频每秒1帧
-        video = cv.VideoWriter(output_path + f'\\{filename[:-4]}_e.mp4', cv.VideoWriter_fourcc(*'X264'), fps,
+        fps = 5  # 视频每秒1帧
+        print(os.path.join(output_path + f'{filename[:-4]}_e.mp4'))
+        video = cv.VideoWriter(os.path.join(output_path,f'{filename[:-4]}_e.mp4'), cv.VideoWriter_fourcc(*'MJPG'), fps,
                                size)
         for i in range(len(imgs)):
             img = imgs[i]
