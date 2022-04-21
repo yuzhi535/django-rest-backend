@@ -1,20 +1,22 @@
 from __future__ import division
 
-import copy
 import math
 import os
 import time
-from typing import Union
+from typing import Union, Optional, Tuple, Mapping, List
 
 import cv2 as cv
+import mediapipe as mp
 import numpy as np
+import pandas as pd
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError
 from django.http import HttpResponse, JsonResponse
 # deal with videos
 from imutils.video import FileVideoStream
-import pandas as pd
+from mediapipe.python.solutions.drawing_utils import RED_COLOR, DrawingSpec, _RGB_CHANNELS, WHITE_COLOR, \
+    _normalized_to_pixel_coordinates
 from rest_framework import views
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
@@ -25,13 +27,19 @@ from rest_framework.views import APIView
 
 from backend.models import User, CustomUser
 
-import mediapipe as mp
-
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
 
 division = 10000
+_VISIBILITY_THRESHOLD = 0.5
+_PRESENCE_THRESHOLD = 0.5
+POSE_CONNECTIONS = frozenset([(0, 2), (0, 5), (2, 7), (5, 8), (11, 12), (11, 13),
+                              (13, 15), (15, 17), (15, 19), (15, 21), (17, 19),
+                              (12, 14), (14, 16), (16, 18), (16, 20), (16, 22),
+                              (18, 20), (11, 23), (12, 24), (23, 24), (23, 25),
+                              (24, 26), (25, 27), (26, 28), (27, 29), (28, 30),
+                              (29, 31), (30, 32), (27, 31), (28, 32)])
 
 
 def show(request):
@@ -203,7 +211,6 @@ class CustomAuthToken(ObtainAuthToken):
         })
 
 
-# TODO 使用mediapipe 重写
 '''
 1. 首先要兼容openpose生成的csv文件
 2. 
@@ -211,7 +218,8 @@ class CustomAuthToken(ObtainAuthToken):
 
 
 class Predict(APIView):
-    position = range(11, 33)
+    position = list(range(11, 33)) + [0, ]
+    draw_position = position + [2, 5, 7, 8]
 
     position_map = {
         11: 'Left shoulder',
@@ -235,7 +243,8 @@ class Predict(APIView):
         29: 'Left heel',
         30: 'Right heel',
         31: 'Left foot index',
-        32: 'Right foot index'
+        32: 'Right foot index',
+        0: 'nose',
     }
 
     def __init__(self, **kwargs):
@@ -272,8 +281,9 @@ class Predict(APIView):
         cost_larm = self.dynamic_time_warping(criterion[1], out[1])
         cost_rleg = self.dynamic_time_warping(criterion[2], out[2])
         cost_lleg = self.dynamic_time_warping(criterion[3], out[3])
+        cost_head = self.dynamic_time_warping(criterion[4], out[4])
 
-        # print('head', cost_head)
+        print('head', cost_head)
         print('rarm', cost_rarm)
         print('larm', cost_larm)
         print('rleg', cost_rleg)
@@ -284,7 +294,9 @@ class Predict(APIView):
         key = 1.5
         evaluate = ""
         error = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
-               "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
+                 "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
+        if cost_head >= key:
+            evaluate += error[0]
         if cost_rarm >= key:
             evaluate = evaluate + error[1]
         if cost_larm >= key:
@@ -312,6 +324,7 @@ class Predict(APIView):
         larms = []
         rlegs = []
         llegs = []
+        head = []
 
         if not openpose:
             for coordinates in res['coordinates']:
@@ -327,10 +340,12 @@ class Predict(APIView):
                         continue
                     else:
                         pos[Predict.position_map[idx]] = np.array(
-                            [int(coordinates[Predict.position_map[idx]][0]), int(coordinates[Predict.position_map[idx]][1])])
+                            [int(coordinates[Predict.position_map[idx]][0]),
+                             int(coordinates[Predict.position_map[idx]][1])])
 
                 # 以左肩膀和右肩膀的中点为中心
-                if not np.any(np.array([np.isnan(np.min(pos[Predict.position_map[11]])), np.isnan(np.min(pos[Predict.position_map[12]]))])):
+                if not np.any(np.array([np.isnan(np.min(pos[Predict.position_map[11]])),
+                                        np.isnan(np.min(pos[Predict.position_map[12]]))])):
                     center = (pos[Predict.position_map[11]] + pos[Predict.position_map[12]]) // 2
                     Predict.transform(pos, center)
                 else:
@@ -344,14 +359,17 @@ class Predict(APIView):
                     Predict.position_map[26]), 'Right ankle': pos.get(Predict.position_map[28])})
                 llegs.append({'Left hip': pos.get(Predict.position_map[13]), 'Left knee': pos.get(
                     Predict.position_map[15]), 'Left ankle': pos.get(Predict.position_map[27])})
+                head.append(
+                    {'nose': pos.get(Predict.position_map[0])}
+                )
         else:
             candidates, subsets = res[0], res[1]
             pos_name = ('nose', 'neck',
-                    'rshoulder', 'relbow', 'rhand',
-                    'lshoulder', 'lelbow', 'lhand',
-                    'rhip', 'rknee', 'rankle',
-                    'lhip', 'lknee', 'lankle')
-            
+                        'rshoulder', 'relbow', 'rhand',
+                        'lshoulder', 'lelbow', 'lhand',
+                        'rhip', 'rknee', 'rankle',
+                        'lhip', 'lknee', 'lankle')
+
             for i in range(len(candidates)):
                 candidate_dat = candidates[i]
                 subset_dat = subsets[i]
@@ -387,13 +405,16 @@ class Predict(APIView):
                     'rknee'), 'Right ankle': pos.get('rankle')})
                 llegs.append({'Left hip': pos.get('lhip'), 'Left knee': pos.get(
                     'lknee'), 'Left ankle': pos.get('lankle')})
-        return rarms, larms, rlegs, llegs
+                head.append(
+                    {'nose': pos.get('nose')}
+                )
+        return rarms, larms, rlegs, llegs, head
 
     def process_csv(self, base_path='output', thresh=.3):
         sz = len(os.listdir(base_path)) // 3  # 3个文件一套
 
         candidates, subsets = [], []
-        
+
         for file in range(sz):
             candidate_dat = pd.read_csv(os.path.join(
                 base_path, f'{file}_candidate.csv'))
@@ -498,17 +519,17 @@ class Predict(APIView):
             # Draw segmentation on the image.
             # To improve segmentation around boundaries, consider applying a joint
             # bilateral filter to "results.segmentation_mask" with "image".
-            condition = np.stack(
-                (results.segmentation_mask,) * 3, axis=-1) > 0.1
-            bg_image = np.zeros(image.shape, dtype=np.uint8)
-            bg_image[:] = BG_COLOR
-            annotated_image = np.where(
-                condition, annotated_image, bg_image)
+            # condition = np.stack(
+            #     (results.segmentation_mask,) * 3, axis=-1) > 0.1
+            # bg_image = np.zeros(image.shape, dtype=np.uint8)
+            # bg_image[:] = BG_COLOR
+            # annotated_image = np.where(
+            #     condition, annotated_image, bg_image)
             # Draw pose landmarks on the image.
-            mp_drawing.draw_landmarks(
+            Predict.draw_landmarks(
                 annotated_image,
                 results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
+                POSE_CONNECTIONS,
                 landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style())
 
         results = {
@@ -526,10 +547,68 @@ class Predict(APIView):
 
         fps = 5  # 视频每秒1帧
         print(os.path.join(output_path + f'{filename[:-4]}_e.mp4'))
-        video = cv.VideoWriter(os.path.join(output_path,f'{filename[:-4]}_e.mp4'), cv.VideoWriter_fourcc(*'H264'), fps,
+        video = cv.VideoWriter(os.path.join(output_path, f'{filename[:-4]}_e.mp4'), cv.VideoWriter_fourcc(*'H264'), fps,
                                size)
         for i in range(len(imgs)):
             img = imgs[i]
             video.write(img)
 
         video.release()
+
+    @staticmethod
+    def draw_landmarks(image, landmark_list, connections: Optional[List[Tuple[int, int]]] = None
+                       , landmark_drawing_spec: Union[DrawingSpec,
+                                                      Mapping[int, DrawingSpec]] = DrawingSpec(
+                color=RED_COLOR),
+                       connection_drawing_spec: Union[DrawingSpec,
+                                                      Mapping[Tuple[int, int],
+                                                              DrawingSpec]] = DrawingSpec()):
+
+        if not landmark_list:
+            return
+        if image.shape[2] != _RGB_CHANNELS:
+            raise ValueError('Input image must contain three channel rgb data.')
+        image_rows, image_cols, _ = image.shape
+        idx_to_coordinates = {}
+        for idx, landmark in enumerate(landmark_list.landmark):
+            if idx not in Predict.draw_position: continue
+            if ((landmark.HasField('visibility') and
+                 landmark.visibility < _VISIBILITY_THRESHOLD) or
+                    (landmark.HasField('presence') and
+                     landmark.presence < _PRESENCE_THRESHOLD)):
+                continue
+            landmark_px = _normalized_to_pixel_coordinates(landmark.x, landmark.y,
+                                                           image_cols, image_rows)
+            if landmark_px:
+                idx_to_coordinates[idx] = landmark_px
+        if connections:
+            num_landmarks = len(landmark_list.landmark)
+            # Draws the connections if the start and end landmarks are both visible.
+            for connection in connections:
+                start_idx = connection[0]
+                end_idx = connection[1]
+                if not (0 <= start_idx < num_landmarks and 0 <= end_idx < num_landmarks):
+                    raise ValueError(f'Landmark index is out of range. Invalid connection '
+                                     f'from landmark #{start_idx} to landmark #{end_idx}.')
+                if start_idx in idx_to_coordinates and end_idx in idx_to_coordinates:
+                    drawing_spec = connection_drawing_spec[connection] if isinstance(
+                        connection_drawing_spec, Mapping) else connection_drawing_spec
+                    cv.line(image, idx_to_coordinates[start_idx],
+                            idx_to_coordinates[end_idx], drawing_spec.color,
+                            drawing_spec.thickness)
+        # Draws landmark points after finishing the connection lines, which is
+        # aesthetically better.
+        if landmark_drawing_spec:
+            for idx, landmark_px in idx_to_coordinates.items():
+                drawing_spec = landmark_drawing_spec[idx] if isinstance(
+                    landmark_drawing_spec, Mapping) else landmark_drawing_spec
+                # White circle border
+                circle_border_radius = max(drawing_spec.circle_radius + 1,
+                                           int(drawing_spec.circle_radius * 1.2))
+                cv.circle(image, landmark_px, circle_border_radius, WHITE_COLOR,
+                          drawing_spec.thickness)
+                # Fill color into the circle
+                cv.circle(image, landmark_px, drawing_spec.circle_radius,
+                          drawing_spec.color, drawing_spec.thickness)
+
+        pass
