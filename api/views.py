@@ -256,12 +256,9 @@ class Predict(APIView):
         split_path = os.path.join(uc_path, 'test_split')
         uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
-
-        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=50)
+        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=100)
 
         res = self.process(imgs, output_path=pro_path)
-
-
 
         try:
             self.make_video(res['data'], uc_path, filename)
@@ -284,7 +281,7 @@ class Predict(APIView):
         # score = 100 - max(cost_head, cost_larm,
         #                   cost_larm, cost_rleg, cost_lleg)
 
-        key = 10
+        key = 1.5
         evaluate = ""
         error = ["您的头部动作不标准 ", "您的右臂动作不标准 ",
                "您的左臂动作不标准 ", "您的右腿动作不标准 ", "您的左腿动作不标准 "]
@@ -348,7 +345,6 @@ class Predict(APIView):
                 llegs.append({'Left hip': pos.get(Predict.position_map[13]), 'Left knee': pos.get(
                     Predict.position_map[15]), 'Left ankle': pos.get(Predict.position_map[27])})
         else:
-            print(len(res))
             candidates, subsets = res[0], res[1]
             pos_name = ('nose', 'neck',
                     'rshoulder', 'relbow', 'rhand',
