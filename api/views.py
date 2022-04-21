@@ -3,6 +3,7 @@ import os
 import time
 from typing import Union, Optional, Tuple, Mapping, List
 
+import av
 import cv2 as cv
 import mediapipe as mp
 import numpy as np
@@ -268,7 +269,7 @@ class Predict(APIView):
         res = self.process(imgs, output_path=pro_path)
 
         try:
-            self.make_video(res['data'], uc_path, filename)
+            self.make_video(res['data'], uc_path, filename[:-4]+'_e.mp4')
         except AttributeError:
             return JsonResponse({'status': 403})
 
@@ -540,18 +541,27 @@ class Predict(APIView):
         assert len(imgs) > 0, 'the images count is zero!!!'
 
         img = imgs[0]
-        imgInfo = img.shape
-        size = (imgInfo[1], imgInfo[0])  # 宽高
+        fps = 5
 
-        fps = 5  # 视频每秒1帧
-        print(os.path.join(output_path + f'{filename[:-4]}_e.mp4'))
-        video = cv.VideoWriter(os.path.join(output_path, f'{filename[:-4]}_e.mp4'), cv.VideoWriter_fourcc(*'H264'), fps,
-                               size)
-        for i in range(len(imgs)):
-            img = imgs[i]
-            video.write(img)
+        container = av.open(os.path.join(output_path, filename), mode="w")
+        print(f'file path is {os.path.join(output_path, filename)}')
+        stream = container.add_stream("h264", rate=fps)
+        stream.pix_fmt = "yuv420p"
+        stream.height, stream.width = img.shape[:-1]
 
-        video.release()
+        for img in imgs:
+            img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+            frame = av.VideoFrame.from_ndarray(img, format="rgb24")
+            for packet in stream.encode(frame):
+                container.mux(packet)
+
+        # Flush stream
+        for packet in stream.encode():
+            container.mux(packet)
+
+        # Close the file
+        container.close()
+        
 
     @staticmethod
     def draw_landmarks(image, landmark_list, connections: Optional[List[Tuple[int, int]]] = None
