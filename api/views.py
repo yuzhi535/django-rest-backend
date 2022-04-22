@@ -98,6 +98,7 @@ def register(request):
     birthday = request.POST.get('birthday')
     idcard_number = request.POST.get('idcard_number')
     hobbies = request.POST.get('hobbies')
+    print(f'birthday={birthday}')
 
     user = CustomUser.objects.filter(phone_number=phone_number)
     if user:
@@ -116,7 +117,7 @@ def register(request):
                     name=name,
                     height=height,
                     weight=weight,
-                    birthday=birthday,
+                    birthday=birthday if birthday else None,
                     hobbies=hobbies,
                     idcard_number=idcard_number,
                     avatar=avatar,
