@@ -99,8 +99,10 @@ a backend for my school homework
 ### 返回
 
 - status：204
-- 预测完成的视频url
-- 评价
+- 预测完成的视频url(url)
+- 评价(evaluate)
+- 分数(score)
+- 标准视频(criterion)
 
 #### 若失败
 - status:403
