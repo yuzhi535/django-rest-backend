@@ -121,6 +121,9 @@ class Course(models.Model):
     rating = models.IntegerField(verbose_name='course rating')
     assessment = models.FloatField(verbose_name='course assessment')
     during_time = models.IntegerField(verbose_name='during time')
+    
+    def __name__(self):
+        return self.name
 
 
 class Comment(models.Model):

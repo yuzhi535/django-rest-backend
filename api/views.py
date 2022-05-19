@@ -265,7 +265,7 @@ class Predict(APIView):
         split_path = os.path.join(uc_path, 'test_split')
         uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
-        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=100)
+        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=500)
 
         res = self.process(imgs, output_path=pro_path)
 
@@ -459,19 +459,19 @@ class Predict(APIView):
 
         imgs = []
 
-        elapsed = 1 / fps_limit
-        prev = time.time()
-        i = 0
+        # elapsed = 1 / fps_limit
+        # prev = time.time()
+        # i = 0
         print('start process video')
         while stream.more():
             # grab the frame from the threaded video file stream
             frame = stream.read()
 
-            elapsed_time = time.time() - prev
-            if elapsed_time > elapsed:
-                prev = time.time()
-                imgs.append(frame)
-                i += 1
+            imgs.append(frame)
+            # elapsed_time = time.time() - prev
+            # if elapsed_time > elapsed:
+            #     prev = time.time()
+            #     i += 1
         stream.stop()
         print('end process video')
         print(f'num of frames i {len(imgs)}')

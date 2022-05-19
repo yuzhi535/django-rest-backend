@@ -136,3 +136,5 @@ dmypy.json
 *.mp4
 .env
 *.log
+site/
+static/
