@@ -11,6 +11,13 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 import os
 from pathlib import Path
+from django.core.management.utils import get_random_secret_key
+import environ 
+
+# initialize environment
+env = environ.Env()
+env.read_env()
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,7 +26,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-q2-x0^#0(^jwg9l#)h!vta_u^6km!9^^$#(fa1(mevtxy*hg5&'
+# SECRET_KEY = 'django-insecure-q2-x0^#0(^jwg9l#)h!vta_u^6km!9^^$#(fa1(mevtxy*hg5&'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -78,12 +86,12 @@ WSGI_APPLICATION = 'Django_rest_backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'openpose',
-        'USER': 'yuxi',
-        'PASSWORD': '010503',
-        'HOST': '110.40.185.43',
+        'NAME': env('DATABASENAME'),
+        'USER': env('DATABASEUSER'),
+        'PASSWORD': env('DATABASEPASSWORD'),
+        'HOST': env('DATABASEHOST'),
         # 'HOST': 'localhost',
-        'PORT': '15432',
+        'PORT': env('DATABASEPORT'),
     }
 }
 
@@ -128,9 +136,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.0/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "static")]
+# STATICFILES_DIRS = [
+#     os.path.join(BASE_DIR, "static")]
 MEDIA_URL = '/media/'
+STATIC_ROOT = os.path.join(BASE_DIR, "static")
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 

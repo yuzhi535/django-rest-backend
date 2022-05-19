@@ -1,0 +1,30 @@
+#!/bin/bash
+
+NAME="Django_rest_backend"  #Django application name
+DIR=/data/myproject/django-rest-backend   #Directory where project is located
+USER=yuxi   #User to run this script as
+GROUP=yuxi  #Group to run this script as
+WORKERS=4     #Number of workers that Gunicorn should spawn
+SOCKFILE=unix:/data/myproject/django-rest-backend/gunicorn.sock   #This socket file will communicate with Nginx 
+DJANGO_SETTINGS_MODULE=Django_rest_backend.settings   #Which Django setting file should use
+DJANGO_WSGI_MODULE=Django_rest_backend.wsgi           #Which WSGI file should use
+LOG_LEVEL=debug
+cd $DIR
+source /data/myproject/django-rest-backend/venv/bin/activate  #Activate the virtual environment
+export DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE
+export PYTHONPATH=$DIR:$PYTHONPATH
+
+
+#Command to run the progam under supervisor
+exec /data/myproject/django-rest-backend/venv/bin/gunicorn ${DJANGO_WSGI_MODULE}:application \
+--name $NAME \
+--workers $WORKERS \
+--user=$USER \
+--group=$GROUP \
+--bind=$SOCKFILE \
+--log-level=$LOG_LEVEL \
+--forwarded-allow-ips=* \
+--proxy-allow-from=* \
+--timeout 300 \
+--log-file=-
+

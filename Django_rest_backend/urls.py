@@ -26,9 +26,7 @@ from django.conf.urls.static import static
 from django.urls import path, include
 
 urlpatterns = [
-                  path('api/', include("api.urls")),
-                  # media配置——配合settings中的MEDIA_ROOT的配置，就可以在浏览器的地址栏访问media文件夹及里面的文件了
-                  # re_path(r'media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
-                  # url(r'media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT})
-              ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL,
-                                                                                         document_root=settings.STATIC_ROOT)
+    path('admin/', admin.site.urls),
+    path('api/', include("api.urls")),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) + static(settings.STATIC_URL,
+                                                                           document_root=settings.STATIC_ROOT)

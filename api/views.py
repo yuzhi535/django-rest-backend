@@ -265,7 +265,7 @@ class Predict(APIView):
         split_path = os.path.join(uc_path, 'test_split')
         uv_path = os.path.join(uc_path, filename)
         pro_path = os.path.join(uc_path, 'pro')
-        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=100)
+        imgs = self.split_video(uv_path, output_path=split_path, fps_limit=500)
 
         res = self.process(imgs, output_path=pro_path)
 
@@ -309,10 +309,17 @@ class Predict(APIView):
         if evaluate == "":
             evaluate = "您的动作非常完美"
 
+        score = int(100 - 0.5*cost_head - 1.2 * \
+            (cost_larm+cost_rarm)-(cost_rleg+cost_lleg))
+
         filename = filename[:-4] + "_e.mp4"
         return JsonResponse(data={'status': 204,
                                   'evaluate': evaluate,
-                                  'url': f'{userID}/{course}/{filename}'})
+                                  'url': f'{userID}/{course}/{filename}',
+                                  'criterion': f'taiji/{course}.mp4',
+                                  'score': score
+                                  }
+                            )
 
     def delete_all_files(self, dir: str):
         for file in os.listdir(dir):
@@ -333,10 +340,12 @@ class Predict(APIView):
                 # 只需要看到14个就够了，不需要脸部数据
                 for idx in Predict.position:
                     if coordinates.get(Predict.position_map[idx]) is None:
-                        pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
+                        pos[Predict.position_map[idx]] = np.array(
+                            [np.NAN, np.NAN])
                         continue
                     elif coordinates[Predict.position_map[idx]][2] < thresh:
-                        pos[Predict.position_map[idx]] = np.array([np.NAN, np.NAN])
+                        pos[Predict.position_map[idx]] = np.array(
+                            [np.NAN, np.NAN])
                         continue
                     else:
                         pos[Predict.position_map[idx]] = np.array(
@@ -346,7 +355,8 @@ class Predict(APIView):
                 # 以左肩膀和右肩膀的中点为中心
                 if not np.any(np.array([np.isnan(np.min(pos[Predict.position_map[11]])),
                                         np.isnan(np.min(pos[Predict.position_map[12]]))])):
-                    center = (pos[Predict.position_map[11]] + pos[Predict.position_map[12]]) // 2
+                    center = (pos[Predict.position_map[11]] +
+                              pos[Predict.position_map[12]]) // 2
                     Predict.transform(pos, center)
                 else:
                     continue
@@ -430,7 +440,8 @@ class Predict(APIView):
         coordinates = []
         for ind, img in enumerate(imgs):
             ret = Predict.predict(img)
-            if ret is None: continue
+            if ret is None:
+                continue
             out_img = ret['data']
 
             out_imgs.append(out_img)
@@ -438,7 +449,6 @@ class Predict(APIView):
 
         return {'coordinates': coordinates, 'data': out_imgs}
 
-    # TODO use faster video split library
     def split_video(self, video: str, output_path='./data', fps_limit=10) -> list:
         """
         split a video to frames. return a list of a quantity of images
@@ -449,19 +459,19 @@ class Predict(APIView):
 
         imgs = []
 
-        elapsed = 1 / fps_limit
-        prev = time.time()
-        i = 0
+        # elapsed = 1 / fps_limit
+        # prev = time.time()
+        # i = 0
         print('start process video')
         while stream.more():
             # grab the frame from the threaded video file stream
             frame = stream.read()
 
-            elapsed_time = time.time() - prev
-            if elapsed_time > elapsed:
-                prev = time.time()
-                imgs.append(frame)
-                i += 1
+            imgs.append(frame)
+            # elapsed_time = time.time() - prev
+            # if elapsed_time > elapsed:
+            #     prev = time.time()
+            #     i += 1
         stream.stop()
         print('end process video')
         print(f'num of frames i {len(imgs)}')
@@ -512,7 +522,8 @@ class Predict(APIView):
                 return None
             for id in Predict.position:
                 coordinates[Predict.position_map[id]] = (results.pose_landmarks.landmark[id].x * image_width,
-                                                         results.pose_landmarks.landmark[id].y * image_height,
+                                                         results.pose_landmarks.landmark[id].y *
+                                                         image_height,
                                                          results.pose_landmarks.landmark[id].visibility)
 
             annotated_image = image.copy()
@@ -562,25 +573,25 @@ class Predict(APIView):
 
         # Close the file
         container.close()
-        
 
     @staticmethod
-    def draw_landmarks(image, landmark_list, connections: Optional[List[Tuple[int, int]]] = None
-                       , landmark_drawing_spec: Union[DrawingSpec,
-                                                      Mapping[int, DrawingSpec]] = DrawingSpec(
-                color=RED_COLOR),
-                       connection_drawing_spec: Union[DrawingSpec,
-                                                      Mapping[Tuple[int, int],
-                                                              DrawingSpec]] = DrawingSpec()):
+    def draw_landmarks(image, landmark_list, connections: Optional[List[Tuple[int, int]]] = None, landmark_drawing_spec: Union[DrawingSpec,
+                                                                                                                               Mapping[int, DrawingSpec]] = DrawingSpec(
+        color=RED_COLOR),
+        connection_drawing_spec: Union[DrawingSpec,
+                                       Mapping[Tuple[int, int],
+                                               DrawingSpec]] = DrawingSpec()):
 
         if not landmark_list:
             return
         if image.shape[2] != _RGB_CHANNELS:
-            raise ValueError('Input image must contain three channel rgb data.')
+            raise ValueError(
+                'Input image must contain three channel rgb data.')
         image_rows, image_cols, _ = image.shape
         idx_to_coordinates = {}
         for idx, landmark in enumerate(landmark_list.landmark):
-            if idx not in Predict.draw_position: continue
+            if idx not in Predict.draw_position:
+                continue
             if ((landmark.HasField('visibility') and
                  landmark.visibility < _VISIBILITY_THRESHOLD) or
                     (landmark.HasField('presence') and
@@ -619,5 +630,3 @@ class Predict(APIView):
                 # Fill color into the circle
                 cv.circle(image, landmark_px, drawing_spec.circle_radius,
                           drawing_spec.color, drawing_spec.thickness)
-
-        pass

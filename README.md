@@ -4,6 +4,11 @@ a backend for my school homework
 
 ---
 
+##
+[**_部署教程_**](https://medium.com/faun/deploy-django-app-with-nginx-gunicorn-and-supervisor-on-ubuntu-server-ff58f5c201ac)
+
+--- 
+
 ## 注册接口
 
 ### 必填：
